@@ -1,0 +1,73 @@
+name: Generate bridge and verify Flutter
+on:
+  push:
+    branches: [feat/application-foundation]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bridge-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+      - name: Build pinned VP8 dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm
+          bash scripts/build-libvpx.sh linux "$GITHUB_WORKSPACE/target/native-deps/libvpx"
+          echo "VPX_INCLUDE_DIR=$GITHUB_WORKSPACE/target/native-deps/libvpx/source" >> "$GITHUB_ENV"
+          echo "VPX_LIB_DIR=$GITHUB_WORKSPACE/target/native-deps/libvpx/build" >> "$GITHUB_ENV"
+          echo 'VPX_LIB_NAME=vpx' >> "$GITHUB_ENV"
+      - name: Install pinned Rust tools
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal
+          cargo install cargo-expand --version 1.0.127 --locked --jobs 2
+      - name: Verify and install bridge generator
+        shell: python
+        run: |
+          import hashlib, hmac, io, pathlib, re, tarfile, urllib.request
+          name='flutter_rust_bridge_codegen-x86_64-unknown-linux-musl-v2.13.0.tgz'
+          url='https://github.com/fzyzcjy/flutter_rust_bridge/releases/download/v2.13.0/'+name
+          data=urllib.request.urlopen(url,timeout=120).read()
+          expected=re.findall(r'\b[a-fA-F0-9]{64}\b',urllib.request.urlopen(url+'.sha256',timeout=30).read().decode())
+          assert len(expected)==1 and hmac.compare_digest(hashlib.sha256(data).hexdigest(),expected[0].lower()), 'generator checksum mismatch'
+          target=pathlib.Path('target/tools/flutter_rust_bridge_codegen')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          with tarfile.open(fileobj=io.BytesIO(data),mode='r:gz') as archive:
+            members=[m for m in archive.getmembers() if m.isfile() and pathlib.PurePosixPath(m.name).name=='flutter_rust_bridge_codegen']
+            assert len(members)==1, 'unexpected generator archive'
+            target.write_bytes(archive.extractfile(members[0]).read())
+          target.chmod(0o755)
+      - name: Resolve bridge dependencies
+        working-directory: packages/engine_bridge
+        run: flutter pub get
+      - name: Generate matching Dart and Rust bridge
+        working-directory: packages/engine_bridge
+        run: ../../target/tools/flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml
+      - name: Resolve application dependencies
+        working-directory: apps/client
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze and test Flutter
+        working-directory: apps/client
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Preserve generated bridge for local review
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: bridge-generated-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            crates/dh-ffi/src/frb_generated.rs
+            packages/engine_bridge/lib/src/rust/

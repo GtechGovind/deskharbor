@@ -3,6 +3,7 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 concurrency:
@@ -16,12 +17,48 @@ jobs:
         os: [windows-2025, ubuntu-24.04, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
       - name: Install pinned Rust
         run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - name: Windows native build tools
+        if: runner.os == 'Windows'
+        id: msys
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: git make perl mingw-w64-x86_64-nasm
+      - name: Generate pinned Windows VP8 project
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: bash scripts/build-libvpx.sh windows-project "$(cygpath -u "$GITHUB_WORKSPACE")/target/native-deps/libvpx"
+      - name: Build pinned Windows VP8 archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          MSYS_ROOT: ${{ steps.msys.outputs.msys2-location }}
+        run: ./scripts/build-libvpx.ps1 -Root "$env:GITHUB_WORKSPACE/target/native-deps/libvpx" -NasmDirectory (Join-Path $env:MSYS_ROOT 'mingw64/bin')
+      - name: Build pinned Unix VP8 archive
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get update
+            sudo apt-get install -y nasm
+            mode=linux
+          else
+            command -v nasm || brew install nasm
+            mode=macos
+          fi
+          bash scripts/build-libvpx.sh "$mode" "$GITHUB_WORKSPACE/target/native-deps/libvpx"
+          echo "VPX_INCLUDE_DIR=$GITHUB_WORKSPACE/target/native-deps/libvpx/source" >> "$GITHUB_ENV"
+          echo "VPX_LIB_DIR=$GITHUB_WORKSPACE/target/native-deps/libvpx/build" >> "$GITHUB_ENV"
+          echo 'VPX_LIB_NAME=vpx' >> "$GITHUB_ENV"
       - name: Format
         run: cargo fmt --all -- --check
       - name: Windows tests

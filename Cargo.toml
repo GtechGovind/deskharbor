@@ -1,6 +1,20 @@
 [workspace]
 resolver = "3"
-members = ["crates/dh-platform", "crates/dh-media", "crates/dh-protocol", "crates/dh-auth", "crates/dh-core", "crates/dh-net", "crates/dh-storage", "crates/dh-clipboard", "crates/dh-transfer", "bins/dh-platform-probe"]
+members = [
+    "crates/dh-platform",
+    "crates/dh-media",
+    "crates/dh-protocol",
+    "crates/dh-auth",
+    "crates/dh-core",
+    "crates/dh-net",
+    "crates/dh-storage",
+    "crates/dh-clipboard",
+    "crates/dh-transfer",
+    "crates/dh-ffi",
+    "bins/dh-platform-probe",
+    "bins/dh-hostd",
+    "bins/dh-cli",
+]
 
 [workspace.package]
 version = "0.0.1"

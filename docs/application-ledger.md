@@ -25,3 +25,29 @@ Task4 data: SQLite reopen and future-schema/identity replacement tests observed 
 Ruling: use MIT for independently written DeskHarbor source and publish the development source/CI before product completion — the user requested open source and hosted builds while local prerequisites are prepared; cost: repository contents must clearly remain marked under development. No production release or certification is implied.
 
 Verification: Windows53tests passed after the transport/data additions; Windows strict whole-workspace Clippy passed. WSL whole-workspace tests completed successfully; detailed counts and Unix-only transfer case retained in linux-tests.log. libc was pinned forward from0.2.177 to0.2.191 to satisfy current Tokio/mio; native source semantics were unchanged and WSL regressions ran.
+
+Hosted CI checkpoint: run42489422271 exposed a pre-existing Unix test-only umask guard using u32 rather than libc::mode_t on macOS. Changed the guard's type; run42489822031 then passed all five jobs: Windows, Ubuntu, macOS Intel, macOS ARM and Android probe. Both Mac jobs also built the native Swift harness. This is compile/fixture evidence, not installed-identity or TCC/LoginWindow proof.
+
+Ruling: build the controlled native VP8 wrapper before coordinator/viewer wiring — preserves the mandatory portable video baseline and avoids routing screenshot data through Dart; cost: adding pinned native-library build prerequisites to local/hosted builds. Source dependency is official libvpx1.16.0 commit1024874c5919305883187e2953de8fcb4c3d7fa6, fetched into scratch, not silently copied from TightVNC/RustDesk.
+
+Ruling: switch the remaining engine/UI/surface work to subagent-driven execution — stable interfaces now permit separate file ownership while parent handles VP8/build tooling; cost: integration requires explicit contract review and additional independent task reviews. The user did not require inline execution. No completed foundation work is redispatched.
+
+Preflight continuation:
+
+|Tasks|Shared boundary|Result|
+|---|---|---|
+|7/8|DeskEngine API and event DTOs|Exact contract in docs/engine-contract.md; no shared implementation files.|
+|8/9|FFI engine accessor/surfaces module and Dart NativeSurface|Exact accessor, channel, C ABI and package paths fixed; Task9 owns surfaces.rs, Task8 owns lib.rs.|
+|parent/7|VP8 module|Encoded/decoded ownership and feature flags fixed; no alternate codec implementation.|
+|parent/all|Cargo root, lockfile, build workflows|Controller alone edits these; implementers request dependency/member additions.|
+|7|Runtime/network/daemon tests versus native permissions|Synthetic test backend explicit; native platform success cannot be inferred.|
+|8|UI tests versus real engine integration|Inject fixtures only in tests; production errors propagate from actual engine.|
+|9|Native texture lease lifetime versus Dart events|Native Arc lease through render completion; only metadata crosses Dart.|
+
+Codec progress: three real VP8 fixtures observed RED against unavailable encoders then GREEN using pinned libvpx. Added a fourth regression that first failed because malformed frames did not invalidate inter-frame dependencies; fix now marks decoder keyframe-required and all four Windows codec tests pass. Also covers odd65x49 layout. Windows native library built with MSVC optimized COFF (WholeProgramOptimization=false) after reproducing proprietary /GL archive reindexing link failures. Linux source/archive build completed exit0; later WSL Rust invocation failed before execution with CreateVm/ERROR_TIMEOUT, so Linux VP8 runtime test is not reported passed yet.
+
+Local resource limits: Flutter SDK and FRB generator are verified/pinned, but this workstation lacks complete Flutter Windows CMake integration and Developer Mode plugin symlinks, has low free RAM and now WSL start timeout. Hosted bridge generation/builds are authorized and configured; no global feature/runtime/trust changes are made to work around these conditions.
+
+Task8 source checkpoint1621937 contains Flutter/bridge wrappers and runner hooks; generated wrappers/analyze/widget verification pending hosted generation. Task9 source checkpoint14d6023 contains native texture boundary and targeted tests. Independent Task9 review found Linux raster lifetime, Android include path, Linux retry, macOS public header and stale-frame clearing issues; fix round1 assigned to original implementer. No native task approval or full-runner proof is claimed yet.
+
+Task7 source checkpoint877e076 includes executable unprivileged host/controller integration and owner-protected state. Reported Windows real QUIC/TCP integration checks cover VP8 frame ownership, text clipboard, checksummed file transfer, busy/reset/reconnect and secondary attachment authority. Parent will independently review results/source and run broader/hosted checks before accepting task completion. Native input, non-Windows host capture and installed privileged lifecycle remain explicitly incomplete.

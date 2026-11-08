@@ -92,3 +92,31 @@ Interfaces: Windows/Linux/macOS Intel+ARM/Android build artifacts named by exact
 - [ ] Run Windows/WSL Rust tests, strict Clippy, native tests, Flutter analyze/tests/builds; record real outputs and omissions.
 - [ ] Independent whole-branch review, fix important findings with failing regression tests, then green suite.
 - [ ] Update implementation/acceptance ledgers to exact implemented behavior; retain all missing native proofs/signing qualification as pending.
+
+## Task 7: Executable host/controller coordinator
+
+Read `docs/engine-contract.md` core-engine section first; its exact API/DTOs are binding. Own `dh-core`, daemon/CLI binaries, runtime platform adapters, and necessary network/protocol/data integration. Do not edit root Cargo/lockfiles or existing platform proof safety. Request root dependency additions from controller. Parent owns VP8 implementation and build tooling.
+
+- [ ] Write failing real loopback tests for broker-gated host/controller status, one-controller busy, wrong password, reset revocation and fresh reconnect. Use synthetic source explicitly; no real screen capture/input in tests.
+- [ ] Implement persistent owner-protected configuration, daemon independent of UI, OS-aware native capability statuses, authenticated control and separate media/bulk channels with single-use bounded attachment authority. Preserve all approved security/epoch/input-release policy.
+- [ ] Integrate actual VP8 frames into an Arc-owned latest-frame cache/events; integrate clipboard/files with active-user authority and explicit granted directory. Implement public contract without fake success or placeholder features.
+- [ ] Implement `dh-hostd` and `dh-cli` executable entrypoints and tests; verify meaningful session behavior and blocked unavailable native capabilities. Report remaining limitations honestly.
+- [ ] Run targeted/full suites with parent-provided native library env, self-review own diff, commit only owned files and report to controller for independent review.
+
+## Task 8: Flutter application and Rust bridge
+
+Read `docs/engine-contract.md` Flutter/bridge section first; its API and ownership are binding. Own only the Flutter app, engine_bridge package and listed FFI files. Coordinate contract changes with controller/Task7/Task9; do not edit root Cargo/lockfile.
+
+- [ ] Use test-driven navigation/host/session behavior, including focused keyboard forwarding, stale-state disabling, password clearing and native permission failures.
+- [ ] Implement all approved Material3 screens/controllers, connect them to generated FRB2.13.0 wrappers around actual DeskEngine, and consume Task9 NativeSurface; no Dart pixel traffic.
+- [ ] Generate runner scaffolding/bridge and lockfiles, analyze/test all UI behavior, build locally possible targets or give concrete hosted-build steps. No global VS/Flutter changes.
+- [ ] Self-review own files, commit only owned paths, write report and return for independent task review.
+
+## Task 9: Native video texture boundary
+
+Read `docs/engine-contract.md` native-surface section first. Own native_surfaces package and FFI surfaces.rs only; do not edit app/lib.rs/api or root Cargo/lockfile.
+
+- [ ] Write failing lease/bounds/lifetime tests through actual surfaces.rs helper seam; validate that frame memory remains alive through renderer release and missing frame clears explicitly.
+- [ ] Implement shared C ABI and Windows/Linux/macOS/Android native texture plugins with explicit ownership, RGBA orientation, lifecycle cleanup and dynamic loading of the same Rust engine library.
+- [ ] Verify native build integration where available, static/compile checks otherwise; report runtime gaps without claiming actual display proofs.
+- [ ] Self-review and commit only owned files, write report, return for independent task review.
