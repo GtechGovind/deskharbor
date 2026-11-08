@@ -1,0 +1,13 @@
+[package]
+name = "dh-platform-probe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+dh-platform = { path = "../../crates/dh-platform" }
+serde_json.workspace = true
+
+[lints]
+workspace = true

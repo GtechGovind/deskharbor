@@ -1,0 +1,13 @@
+/target/
+/artifacts/
+/.superpowers/
+**/build/
+**/.gradle/
+**/local.properties
+**/.dart_tool/
+**/captures/
+*.pfx
+*.p12
+*.keystore
+*.jks
+.DS_Store

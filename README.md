@@ -1,0 +1,11 @@
+# DeskHarbor
+
+Independent LAN/VPN remote access with a Rust engine and Flutter UI.
+
+**Current stage: Milestone 0 native platform proofs. The remote-desktop application is not yet implemented or certified.**
+
+The approved specification requires proving desktop sign-in access before building the application UI or calling v1 usable. This repository contains executable native probes and a fail-closed proof ledger. A successful ordinary-desktop capture is not a sign-in-screen proof. WSL and Android emulators do not certify the required physical hardware.
+
+See [the approved design](docs/product-design.md), [implementation ledger](docs/implementation-ledger.md), and [platform-proof implementation plan](docs/superpowers/plans/2026-11-08-platform-proof.md).
+
+No host service is silently installed, no Windows session is signed out, and no remote port is opened by the default inspection command. Captures are local diagnostic artifacts, not screenshots sent to a server.
