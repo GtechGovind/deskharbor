@@ -1,0 +1,20 @@
+group = 'dev.deskharbor.native_surfaces'
+version = '0.0.1'
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.9.1' }
+}
+apply plugin: 'com.android.library'
+android {
+    namespace = 'dev.deskharbor.native_surfaces'
+    compileSdk = 37
+    ndkVersion = '28.2.13676358'
+    defaultConfig {
+        minSdk = 24
+        consumerProguardFiles 'consumer-rules.pro'
+        externalNativeBuild { cmake { cppFlags '-std=c++17 -Wall -Wextra -Werror' } }
+    }
+    externalNativeBuild { cmake { path 'src/main/cpp/CMakeLists.txt' } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+repositories { google(); mavenCentral() }
