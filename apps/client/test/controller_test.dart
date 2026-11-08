@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:engine_bridge/engine_bridge.dart';
 import 'package:deskharbor/controller.dart';
 
 import 'support/fixture_engine.dart';
@@ -16,6 +18,33 @@ void main() {
     controller.dispose();
     await engine.events.close();
   });
+
+  test('key up and focus release wait for an earlier key down to finish', () async {
+    final gate = Completer<void>();
+    engine.inputGate = gate;
+    addTearDown(() { if (!gate.isCompleted) gate.complete(); });
+    controller.focus(7, true);
+    final down = controller.input(7, 'key', usage: 4, pressed: true);
+    await Future<void>.delayed(Duration.zero);
+    final up = controller.input(7, 'key', usage: 4, pressed: false);
+    await Future<void>.delayed(Duration.zero);
+    expect(engine.inputs.length, 1);
+    controller.focus(7, false);
+    gate.complete();
+    await Future.wait([down, up]);
+    await Future<void>.delayed(Duration.zero);
+    expect(engine.inputs.last.kind, 'release_all');
+  });
+
+  test(
+    'epoch and layout changes discard old frame readiness before refocusing',
+    () {
+      engine.emit(kind: 'frame', sessionId: 7, sequence: 12);
+      expect(controller.frames[7], 12);
+      engine.emit(session: engine.session(epoch: 5, layout: 3));
+      expect(controller.frames.containsKey(7), isFalse);
+    },
+  );
 
   test('keyboard is rejected without focus, then carries current monitor epoch and HID usage', () async {
     await controller.input(7, 'key', usage: 4, pressed: true);

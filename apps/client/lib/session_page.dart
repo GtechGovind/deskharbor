@@ -53,10 +53,13 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
         return;
       }
       setState(() => surface = created);
-      if (controller!.frames.containsKey(widget.sessionId)) await present();
+      if (controller!.frames.containsKey(widget.sessionId)) {
+        await present();
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() => surfaceError = 'Native video unavailable: $e');
+      }
     }
   }
 
@@ -76,8 +79,9 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
       if (mounted && surfaceError != null) setState(() => surfaceError = null);
     } catch (e) {
       controller?.focus(widget.sessionId, false);
-      if (mounted)
+      if (mounted) {
         setState(() => surfaceError = 'Native frame unavailable: $e');
+      }
     }
   }
 
@@ -98,8 +102,9 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
     canvasFocus.dispose();
     text.dispose();
     path.dispose();
-    if (surface != null)
+    if (surface != null) {
       unawaited(surface!.dispose().catchError((Object _) {}));
+    }
     super.dispose();
   }
 
@@ -116,8 +121,9 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   }
 
   KeyEventResult key(FocusNode node, KeyEvent event) {
-    if (!ready || !controller!.canInput(widget.sessionId))
+    if (!ready || !controller!.canInput(widget.sessionId)) {
       return KeyEventResult.ignored;
+    }
     final usage = event.physicalKey.usbHidUsage;
     if (usage >> 16 != 7) return KeyEventResult.ignored;
     unawaited(
@@ -267,11 +273,12 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
               onPointerUp: (e) => pointer(e, Size(width, height), up: true),
               onPointerCancel: (_) => unawaited(c.release(widget.sessionId)),
               onPointerHover: (e) {
-                if (canvasFocus.hasFocus)
+                if (canvasFocus.hasFocus) {
                   pointer(e, Size(width, height), up: false);
+                }
               },
               onPointerSignal: (e) {
-                if (e is PointerScrollEvent && ready)
+                if (e is PointerScrollEvent && ready) {
                   unawaited(
                     c.input(
                       widget.sessionId,
@@ -282,6 +289,7 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
                       wheelY: e.scrollDelta.dy.round(),
                     ),
                   );
+                }
               },
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -331,8 +339,9 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final c = controller!, session = c.sessions[widget.sessionId];
-    if (session == null)
+    if (session == null) {
       return const Center(child: Text('Session not found. Return to Connect.'));
+    }
     final display = session.displays
         .where((d) => d.id == session.selectedDisplay)
         .firstOrNull;
@@ -376,8 +385,9 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
                     ],
                     onChanged: c.sessionReady(session.id)
                         ? (id) {
-                            if (id != null)
+                            if (id != null) {
                               unawaited(c.selectMonitor(session.id, id));
+                            }
                           }
                         : null,
                   ),

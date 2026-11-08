@@ -9,6 +9,7 @@ class FixtureEngine implements EngineGateway {
   final saved = <SavedDevice>[];
   bool rejectConnect = false, rejectHost = false;
   int disconnects = 0;
+  Completer<void>? inputGate;
   HostInfo host = HostInfo(
     state: 'permission_needed',
     running: false,
@@ -89,6 +90,7 @@ class FixtureEngine implements EngineGateway {
   @override
   Future<void> sendInput(int sessionId, InputRequest event) async {
     inputs.add(event);
+    if (inputGate case final gate?) await gate.future;
   }
 
   @override

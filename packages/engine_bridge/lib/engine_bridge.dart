@@ -1,3 +1,8 @@
+import 'dart:io';
+
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show ExternalLibrary;
+
 import 'src/rust/api.dart' as api;
 import 'src/rust/streams.dart';
 import 'src/rust/frb_generated.dart';
@@ -36,7 +41,18 @@ abstract interface class EngineGateway {
 class FrbEngine implements EngineGateway {
   @override
   Future<void> initialize(String dataDirectory) async {
-    await RustLib.init();
+    // Resolve the packaged module explicitly. FRB's development-directory
+    // fallback can otherwise load a different copy than the texture plugin.
+    final directory = File(Platform.resolvedExecutable).parent.uri;
+    final libraryPath = switch (Platform.operatingSystem) {
+      'windows' => directory.resolve('dh_ffi.dll').toFilePath(),
+      'linux' => directory.resolve('lib/libdh_ffi.so').toFilePath(),
+      'macos' =>
+        directory.resolve('../Frameworks/libdh_ffi.dylib').toFilePath(),
+      'android' => 'libdh_ffi.so',
+      _ => throw UnsupportedError('DeskHarbor is unavailable on this platform'),
+    };
+    await RustLib.init(externalLibrary: ExternalLibrary.open(libraryPath));
     await api.initialize(dataDir: dataDirectory);
   }
 

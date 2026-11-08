@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:deskharbor/controller.dart';
 import 'package:deskharbor/main.dart';
 
@@ -18,6 +19,76 @@ void main() {
     controller.dispose();
     await engine.events.close();
   });
+  testWidgets('Android retains bottom navigation on a wide tablet', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MyApp(controller: controller));
+    expect(find.byType(NavigationBar), findsOneWidget);
+  });
+  testWidgets(
+    'physical keys forward only on the current focused native canvas',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 1100);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const channel = MethodChannel('deskharbor/native_surfaces');
+      messenger.setMockMethodCallHandler(
+        channel,
+        (call) async => switch (call.method) {
+          'createTexture' => 19,
+      'disposeTexture' => 1,
+      'present' || 'collectDisposedTextures' => null,
+          _ => throw StateError('Unexpected native method ${call.method}'),
+        },
+      );
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      await controller.connect('192.168.1.9:47832', 'fixture-only');
+      engine.emit(kind: 'frame', sessionId: 7, sequence: 1);
+      await tester.pumpWidget(MyApp(controller: controller));
+      await tester.tap(find.text('192.168.1.9:47832').first);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(
+        LogicalKeyboardKey.keyA,
+        physicalKey: PhysicalKeyboardKey.keyA,
+      );
+      expect(engine.inputs.where((e) => e.kind == 'key'), isEmpty);
+      await tester.tap(find.byKey(const Key('remote-canvas')));
+      await tester.sendKeyEvent(
+        LogicalKeyboardKey.keyA,
+        physicalKey: PhysicalKeyboardKey.keyA,
+      );
+      final keys = engine.inputs.where((e) => e.kind == 'key').toList();
+      expect(keys.map((e) => e.usage), [4, 4]);
+      expect(keys.map((e) => e.pressed), [true, false]);
+      expect(keys.map((e) => e.epoch), [4, 4]);
+      await tester.tap(find.byType(TextField).last);
+      await tester.sendKeyEvent(
+        LogicalKeyboardKey.keyB,
+        physicalKey: PhysicalKeyboardKey.keyB,
+      );
+      expect(engine.inputs.where((e) => e.kind == 'key').length, 2);
+      expect(engine.inputs.any((e) => e.kind == 'release_all'), isTrue);
+      engine.emit(session: engine.session(epoch: 5, layout: 3));
+      await tester.pump();
+      expect(find.byType(Texture), findsNothing);
+      await tester.tap(find.byKey(const Key('remote-canvas')));
+      await tester.sendKeyEvent(
+        LogicalKeyboardKey.keyC,
+        physicalKey: PhysicalKeyboardKey.keyC,
+      );
+      expect(engine.inputs.where((e) => e.kind == 'key').length, 2);
+      engine.emit(kind: 'frame', sessionId: 7, sequence: 2);
+      await tester.pumpAndSettle();
+      expect(find.byType(Texture), findsOneWidget);
+    },
+  );
   testWidgets('connect form gives a private address and password entry', (
     tester,
   ) async {
@@ -36,7 +107,7 @@ void main() {
         find.byKey(const Key('connect-password')),
         'test-only-secret',
       );
-      await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
+      await tester.tap(find.text('Connect').last);
       await tester.pumpAndSettle();
       expect(
         tester
@@ -59,6 +130,9 @@ void main() {
       await tester.enterText(
         find.byKey(const Key('host-password')),
         'test-only-secret',
+      );
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Set password'),
       );
       await tester.tap(find.widgetWithText(FilledButton, 'Set password'));
       await tester.pumpAndSettle();
@@ -91,6 +165,9 @@ void main() {
       expect(find.text('No transfers'), findsOneWidget);
       await tester.tap(find.text('Settings').first);
       await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.text('Permissions and native capabilities'),
+      );
       await tester.tap(find.text('Permissions and native capabilities'));
       await tester.pumpAndSettle();
       expect(find.text('Screen capture permission denied'), findsOneWidget);
