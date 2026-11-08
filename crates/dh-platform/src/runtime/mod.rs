@@ -1,5 +1,10 @@
 //! Ordinary user-session runtime. No installed-helper activation or desktop switching.
+#[cfg_attr(not(windows), allow(dead_code))]
+mod input;
 mod private;
+#[cfg(windows)]
+mod windows_input;
+pub use input::NativeInput;
 #[cfg(windows)]
 mod user;
 use crate::report::Display;
@@ -38,7 +43,7 @@ pub fn inspect() -> Availability {
                     state: "ready",
                     user: Some(user),
                     displays: observation.displays,
-                    detail: "Ordinary user desktop capture. Installed sign-in worker and native input are unavailable.",
+                    detail: "Ordinary user desktop capture and input. Installed sign-in/secure-desktop worker remains unqualified.",
                 };
             }
         }
@@ -76,3 +81,36 @@ pub fn capture(id: &str) -> Result<crate::frame::Frame, crate::report::ProbeErro
 
 mod clipboard;
 pub use clipboard::{clipboard_read, clipboard_write};
+
+pub fn inject_input(
+    expected_user: &str,
+    display: &Display,
+    event: NativeInput,
+) -> Result<(), crate::report::ProbeError> {
+    #[cfg(windows)]
+    {
+        windows_input::inject(expected_user, display, event)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (expected_user, display, event);
+        Err(crate::report::ProbeError::new(
+            "input_unavailable",
+            "Native input is unavailable on this platform",
+        ))
+    }
+}
+pub fn release_input(expected_user: &str) -> Result<(), crate::report::ProbeError> {
+    #[cfg(windows)]
+    {
+        windows_input::release(expected_user)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = expected_user;
+        Err(crate::report::ProbeError::new(
+            "input_unavailable",
+            "Native input is unavailable on this platform",
+        ))
+    }
+}
