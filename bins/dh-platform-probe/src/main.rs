@@ -137,7 +137,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     #[test]
     fn capture_is_owner_only_even_under_permissive_umask() {
-        struct Restore(u32);
+        struct Restore(libc::mode_t);
         impl Drop for Restore {
             fn drop(&mut self) {
                 // SAFETY: Restores this unit-test process's previous umask.
