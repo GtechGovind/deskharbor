@@ -7,7 +7,11 @@ publish.workspace = true
 
 [dependencies]
 dh-platform = { path = "../../crates/dh-platform" }
+serde.workspace = true
 serde_json.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.177"
 
 [lints]
 workspace = true

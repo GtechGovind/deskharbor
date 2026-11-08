@@ -1,0 +1,128 @@
+{
+  "schema": "deskharbor.android-host-proof.v1",
+  "recorded_at_utc": "2026-11-08T07:53:34.319045Z",
+  "p0_gate": "blocked",
+  "physical_android_arm64_qualification": "not_run",
+  "build": {
+    "gradle": "8.9",
+    "signing": "Android debug key; not release-signed",
+    "sha256": "95cf4652726754dfe8ee89a3232c82f9bc62927ea1bd9c56a3bba6ba2a977a13",
+    "build_tools": "35.0.0",
+    "artifact": "native/android/probe/artifacts/deskharbor-android-probe-debug.apk",
+    "target_sdk": 35,
+    "min_sdk": 30,
+    "kotlin": "2.0.0",
+    "jdk": "21",
+    "agp": "8.7.3",
+    "status": "passed",
+    "sdk": 35
+  },
+  "unit_tests": {
+    "status": "passed",
+    "results": [
+      "native/android/probe/artifacts/emulator-final-2026-11-08/TEST-org.deskharbor.probe.SessionStateTest.xml",
+      "native/android/probe/artifacts/emulator-final-2026-11-08/TEST-org.deskharbor.probe.ResourceCleanupTest.xml"
+    ],
+    "failures": 0,
+    "tests": 11,
+    "tests_observed_red_before_implementation": true
+  },
+  "emulator": {
+    "consent_and_permission_bypass_used": false,
+    "avd": "DeskHarborP0",
+    "model": "sdk_gphone64_x86_64",
+    "api": 37,
+    "stopped_after_tests": true,
+    "build_fingerprint": "google/sdk_gphone64_x86_64/emu64xa:17/CE2A.260420.019/15611780:user/release-keys",
+    "task_private_avd_path": "C:/Users/govin/Documents/Codex/2026-11-08/de/work/deskharbor/android/avd/DeskHarborP0.avd",
+    "reported_supported_abis": [
+      "x86_64",
+      "arm64-v8a"
+    ],
+    "run_id": "b59c77d1-3eb4-45e5-8b36-1af452d86c80",
+    "execution_arch": "x86_64",
+    "tested_apk_sha256": "95cf4652726754dfe8ee89a3232c82f9bc62927ea1bd9c56a3bba6ba2a977a13",
+    "serial": "emulator-5580"
+  },
+  "passed_emulator_observations": [
+    {
+      "case": "system_consent_declined",
+      "evidence": "native/android/probe/artifacts/emulator-final-2026-11-08/consent-denied-state.json"
+    },
+    {
+      "case": "input_denied_without_accessibility",
+      "evidence": "native/android/probe/artifacts/emulator-final-2026-11-08/proof.jsonl",
+      "sequence": 4
+    },
+    {
+      "case": "accepted_projection_with_foreground_service",
+      "evidence": [
+        "native/android/probe/artifacts/emulator-final-2026-11-08/active-media-projection.txt",
+        "native/android/probe/artifacts/emulator-final-2026-11-08/active-services.txt"
+      ]
+    },
+    {
+      "width": 720,
+      "evidence": "native/android/probe/artifacts/emulator-final-2026-11-08/capture-epoch2.png",
+      "sha256": "f9ec57716a30c3f71b6867896bb043a63ebd94ae9dd849af455df09c3bef0365",
+      "dedicated_rgb_fixture": "not_run",
+      "case": "genuine_native_png_hash_dimensions_and_visual_app_content",
+      "height": 1280
+    },
+    {
+      "case": "foreground_service_remains_when_activity_backgrounded",
+      "evidence": "native/android/probe/artifacts/emulator-final-2026-11-08/background-services.txt"
+    },
+    {
+      "case": "explicit_app_stop_releases_os_projection_and_service",
+      "evidence": [
+        "native/android/probe/artifacts/emulator-final-2026-11-08/explicit-stop-state.json",
+        "native/android/probe/artifacts/emulator-final-2026-11-08/explicit-stop-media-projection.txt",
+        "native/android/probe/artifacts/emulator-final-2026-11-08/explicit-stop-services.txt"
+      ]
+    },
+    {
+      "case": "new_session_requests_system_consent_again",
+      "evidence": "native/android/probe/artifacts/emulator-final-2026-11-08/new-session-consent.xml"
+    },
+    {
+      "case": "visible_foreground_notification_and_notification_stop_cleanup",
+      "evidence": [
+        "native/android/probe/artifacts/emulator-final-2026-11-08/visible-foreground-notification.xml",
+        "native/android/probe/artifacts/emulator-final-2026-11-08/notification-stop-state.json",
+        "native/android/probe/artifacts/emulator-final-2026-11-08/notification-stop-media-projection.txt",
+        "native/android/probe/artifacts/emulator-final-2026-11-08/notification-stop-services.txt"
+      ]
+    },
+    {
+      "case": "post_stop_state_stable",
+      "evidence": "native/android/probe/artifacts/emulator-final-2026-11-08/post-stop-stability.json",
+      "observed_wait_seconds": 3
+    }
+  ],
+  "not_run_cases": [
+    "physical Android11 ARM64",
+    "physical supported modern Android ARM64",
+    "accessibility explicitly enabled gesture completion plus target hit",
+    "accessibility permission revocation",
+    "actual secure lock and system projection revocation callback",
+    "task removal cleanup",
+    "process death OS cleanup and renewed consent",
+    "protected-screen fixture",
+    "rotation and app-sharing resize",
+    "external display or multiwindow input qualification",
+    "dedicated RGBA/RGB fixture inspection"
+  ],
+  "limits": [
+    "Emulator evidence cannot certify Android11+ ARM64 physical support.",
+    "Screen-off on the credential-free emulator left projection active; it is not treated as an actual secure-lock/revocation test.",
+    "Disposable Android Settings ANR prevented explicit accessibility-enable/revoke testing; no permission was silently granted.",
+    "Stop reference flags were corroborated by OS dumpsys; nonzero cleanup_errors must fail qualification."
+  ],
+  "raw_final_trace": "native/android/probe/artifacts/emulator-final-2026-11-08/proof.jsonl",
+  "prior_build": {
+    "evidence_directory": "native/android/probe/artifacts/emulator-2026-11-08",
+    "sha256": "e19a298fa0cbec56b6e36264c3b053144c4d571e79cedfcd3082ab6856910296",
+    "scope": "pre-review; separate from final fixed APK"
+  }
+}

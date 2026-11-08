@@ -25,9 +25,29 @@
 
 ## Progress
 
-- Task1: pending.
-- Task2: pending.
-- Task3: pending.
-- Task4: pending.
-- Task5: pending.
-- Task6: pending.
+| Task | Implemented and verified here | Remaining |
+|---|---|---|
+|1 shared contracts/CLI/gate | Bounded RGBA/BMP; real platform dispatch;24case gate with structured operator/observed checks, contained bounded hashes and macOS installed-identity requirements; CLI errors and tests | Actual qualifying lab attestations |
+|2 Windows | Native inspection and1920×1080 GDI capture; SCM/System worker source; fixed F24 and policy-gated SAS source; service/file ACL, expiry, desktop and refusal fixtures | Install/service execution, VM sign-in/lock/logout/UAC/SAS/input delivery,50cycles; no native input was sent here |
+|3 Linux | DRM inventory; sandboxed restricted linear scanout and F24 helper; Rust/C tests; WSL denied-device/no-display checks | Trusted installed broker; complete plane/modifier composition; physical Ubuntu24.04 Intel/AMD/GDM and transition input |
+|4 Android | Real attended Kotlin APK;11 lifecycle/consent/resource JVM tests; API37x86_64 emulator consent/capture/foreground/stop observations | See Android evidence for exact build/run; accessibility enable/revoke, system stop/lock/protected content and physical ARM64 coverage remain unqualified |
+|5 macOS/lab runner | Swift public-API harness/signing command/private launchd collectors; structured role/context gate; Python read-only collector3tests | First Swift native build; actual signed installs and LoginWindow/Aqua proofs on both architectures |
+|6 review/handoff | Independent read-only initial and final review; substantive findings fixed; Windows20 and Linux15 Rust/CLI tests,3nativeC programs,11AndroidJVM tests,3Python tests; strictRustClippy/format verified | Final artifact packaging and local commits; full product remains blocked |
+
+## Evidence and review
+
+- Meaningful failing tests were observed before implementation for frame row/color order; Windows conversion/session/worker eligibility; native allocation bounds; fixed F24/expiry/SAS policy/SCM ACL/default-to-secure transition; missing/duplicate/tampered/diagnostic-only gate records; calendar timestamps; Linux geometry/layout/color/filter/input and CLI privilege guards; Unix0600 screenshot creation; Android consent epoch/request IDs (including process-restart collision/persistence failure), null display and cleanup; and Python collection/error/qualification behavior. The final relevant suites pass. Unit fixture attestations are never lab evidence.
+- Reviewer found default SCM custom-control permissions unsafe. Fixed protected SYSTEM/Admin-only service-object checks before enabling controls and per dispatch, explicit Default/Winlogon controls without fallback, session-change cancellation, and fatal impersonation-reversion handling. Fresh-boot/old-handle caveat is documented for an exclusively controlled VM.
+- Reviewer found Android delayed consent, resource-allocation/resize cleanup and cross-display tap hazards. Fixed durable one-shot request allocation, immutable epoch matching, nonnull display/resource gating, independent cleanup and default-display-only local-target gestures.
+- Reviewer found privileged Linux sibling dispatch, permissive capture-file mode, connector transformations and weak generic proof records. Fixed the guard before subprocess execution,0600 capture output, explicit transform refusal, structured build-bound observations/signing/context evidence, special/empty/oversized artifact rejection and bounded nonblocking reads.
+- Reviewer found macOS agent observations were lost. Both launchd jobs now use an exclusive private per-identity collector; Mac execution remains unrun.
+- Final independent review found no remaining Critical/Important issues **for the diagnostic harness only**, conditional on fresh build/test verification. No finding certifies a native OS lifecycle or the full product.
+- The virtual-sign-in follow-up added read-only VM preflight/planning. Review rejected an early unexecuted creation path because privileged VM writes through user-owned directories permit path replacement. Removed creation entirely; only a concrete manual Hyper-V Manager procedure with administrator-managed storage remains. The final read-only source/tests passed independent review; VM inventory/storage and actual sign-in stay unverified. No host feature/policy was changed.
+
+## Gate ruling
+
+`docs/proof-gate.json` records **ready=false, passed=0, required=24** and exit2. The cases are required platform proofs; Windows lifecycle testing may use a real isolated Windows11 VM. A VM has not yet been created or tested here. WSL and the x86 Android emulator do not establish the selected physical GPU/ARM64 support matrix.
+
+The user's virtual-sign-in follow-up is accepted: investigate and prepare an isolated Windows VM rather than signing out the user's workstation. Preflight found virtualization active, no installed desktop VM manager or Windows image, and under2GiB free RAM during the existing test run. VM preparation does not convert an unrun sign-in test into a passed case.
+
+Milestones1–5 are **pending** under the user's explicit P0 ordering. No Flutter viewer, password authentication, transport, installed production host, clipboard/files, performance claim or release installer is reported complete.

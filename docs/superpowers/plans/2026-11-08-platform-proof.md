@@ -32,49 +32,55 @@
 
 Files: `crates/dh-platform/src/{lib.rs,report.rs,frame.rs,gate.rs}`; `bins/dh-platform-probe/src/main.rs`; integration tests.
 
-- [ ] Write behavioral failing tests for malformed frames, BMP color/row order and missing proof records.
-- [ ] Implement typed inspection, bounded RGBA frame validation, local image export and evidence evaluation.
-- [ ] Implement inspect/capture/gate CLI with honest nonzero exit statuses.
-- [ ] Verify with cargo test; run native inspection and capture.
+- [x] Write behavioral failing tests for malformed frames, BMP color/row order and missing proof records.
+- [x] Implement typed inspection, bounded RGBA frame validation, local image export and evidence evaluation.
+- [x] Implement inspect/capture/gate CLI with honest nonzero exit statuses.
+- [x] Verify with cargo test; run native inspection and capture.
 
 ### Task 2: Windows native backend
 
 Files: `crates/dh-platform/src/windows/`, optional Windows probe/helper assets and docs.
 
-- [ ] Read Task1's exact interface and implement real display/session/desktop/elevation inspection.
-- [ ] Implement real current-desktop GDI capture with resource cleanup and actual input APIs behind explicit opt-in probe commands.
-- [ ] Provide isolated VM/service proof steps, without signing out or reconfiguring this workstation.
-- [ ] Run applicable native tests and capture; retain evidence.
+- [x] Read Task1's exact interface and implement real display/session/desktop/elevation inspection.
+- [x] Implement real current-desktop GDI capture with resource cleanup and actual input APIs behind explicit opt-in probe commands.
+- [x] Provide isolated VM/service proof steps, without signing out or reconfiguring this workstation.
+- [x] Run applicable native tests and capture; retain evidence.
+
+Installed input/SAS and sign-in execution remain unrun; source completion does not clear a Windows proof.
 
 ### Task 3: Linux native backend and helper
 
 Files: `crates/dh-platform/src/linux/`, `native/linux/` and Linux proof docs.
 
-- [ ] Implement actual DRM/device/session inspection and a narrow capture/helper path.
-- [ ] Exercise denied/unsupported paths and any runnable native checks in WSL.
-- [ ] Document/encode physical Intel+AMD/GDM complete-plane proofs that WSL cannot establish.
-- [ ] Run native compile/tests where available; retain exact environment evidence.
+- [x] Implement actual DRM/device/session inspection and a narrow capture/helper path.
+- [x] Exercise denied/unsupported paths and any runnable native checks in WSL.
+- [x] Document/encode physical Intel+AMD/GDM complete-plane proofs that WSL cannot establish.
+- [x] Run native compile/tests where available; retain exact environment evidence.
+
+General composition and a trusted installed broker are still unfinished; the restricted diagnostic path is not a certified host.
 
 ### Task 4: Android proof application
 
 Files: `native/android/probe/`, native services, Android proof docs.
 
-- [ ] Build an actual Android app requesting MediaProjection consent and tracking foreground-session lifecycle.
-- [ ] Implement explicit AccessibilityService configuration, stop cleanup and local capture evidence.
-- [ ] Build APK with available SDK. Use only an isolated emulator for automated execution; no unrelated connected phone.
-- [ ] Record which required Android lifecycle tests actually ran and which remain physical-lab work.
+- [x] Build an actual Android app requesting MediaProjection consent and tracking foreground-session lifecycle.
+- [x] Implement explicit AccessibilityService configuration, stop cleanup and local capture evidence.
+- [x] Build APK with available SDK. Use only an isolated emulator for automated execution; no unrelated connected phone.
+- [x] Record which required Android lifecycle tests actually ran and which remain physical-lab work.
 
 ### Task 5: macOS native harness and lab runner
 
 Files: `native/macos/`, macOS proof docs, `tests/lab/` and scripts.
 
-- [ ] Implement actual Swift ScreenCaptureKit inspection/capture and a signed-identity-aware install/run harness.
-- [ ] Require the intended daemon/LoginWindow/Aqua security identities and permissions for acceptance.
-- [ ] Record missing Mac/signing evidence as not_run; test runner/evidence behavior on this host.
+- [ ] Implement and natively compile/test Swift ScreenCaptureKit inspection/capture and signed-identity run harness. Source/collectors/signing command are written; first Mac compile/run is unavailable.
+- [x] Require the intended daemon/LoginWindow/Aqua security identities and permissions for acceptance.
+- [x] Record missing Mac/signing evidence as not_run; test runner/evidence behavior on this host.
 
 ### Task 6: Review, evidence and handoff
 
-- [ ] Run all available checks; inspect output; document unavailable tests by name.
-- [ ] Obtain independent code review and address substantive findings with regression tests.
+- [x] Run all available checks; inspect output; document unavailable tests by name.
+- [x] Obtain independent code review and address substantive findings with regression tests.
 - [ ] Commit source, lockfile, tests and ledger; package probe binaries/APK if built.
-- [ ] Do not advance to Milestone1 while required P0 proofs remain unsatisfied.
+- [x] Do not advance to Milestone1 while required P0 proofs remain unsatisfied.
+
+Virtual-sign-in follow-up: read-only VM preflight/plan and guarded manual Hyper-V Manager procedure added and independently reviewed. No creation path executes from this user-owned checkout. No VM or guest sign-in has run. The platform gate remains0/24; this checklist tracks diagnostic implementation, not product acceptance.

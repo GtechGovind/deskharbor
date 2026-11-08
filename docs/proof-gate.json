@@ -1,0 +1,32 @@
+{
+  "ready": false,
+  "required": 24,
+  "passed": 0,
+  "blockers": [
+    "windows_boot_sign_in: not passed",
+    "windows_lock_unlock: not passed",
+    "windows_logout: not passed",
+    "windows_uac: not passed",
+    "windows_sas: not passed",
+    "windows_gui_independent: not passed",
+    "mac_arm64_loginwindow: not passed",
+    "mac_arm64_logout: not passed",
+    "mac_arm64_second_user: not passed",
+    "mac_arm64_permission_revocation: not passed",
+    "mac_intel_loginwindow: not passed",
+    "mac_intel_logout: not passed",
+    "mac_intel_second_user: not passed",
+    "mac_intel_permission_revocation: not passed",
+    "linux_intel_gdm: not passed",
+    "linux_intel_complete_planes: not passed",
+    "linux_intel_input_transitions: not passed",
+    "linux_amd_gdm: not passed",
+    "linux_amd_complete_planes: not passed",
+    "linux_amd_input_transitions: not passed",
+    "android_consent: not passed",
+    "android_foreground: not passed",
+    "android_input_permission: not passed",
+    "android_capture_stop: not passed"
+  ],
+  "qualification": "Checks operator-supplied lab attestations and artifact integrity; does not independently verify hardware, actions, or signing identity. Passing this gate permits further development, not product release."
+}

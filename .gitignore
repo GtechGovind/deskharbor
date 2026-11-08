@@ -1,5 +1,8 @@
 /target/
+/native/macos/.build/
+__pycache__/
 /artifacts/
+**/artifacts/
 /.superpowers/
 **/build/
 **/.gradle/

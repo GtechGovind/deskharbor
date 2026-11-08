@@ -1,0 +1,47 @@
+{
+  "observed_utc": "2026-11-08T07:27:06.251217+00:00",
+  "scope": "WSL negative diagnostic checks only",
+  "card_sysfs_target": "/sys/devices/faux/vgem/drm/card0",
+  "inspection": {
+    "schema_version": 1,
+    "platform": "linux",
+    "environment": "Ubuntu 26.04.1 LTS; kernel 6.18.58.1-microsoft-standard-WSL2",
+    "elevated": false,
+    "process_session": null,
+    "console_session": null,
+    "desktop": null,
+    "session_kind": "no_console",
+    "displays": [],
+    "checks": [
+      {
+        "name": "device_access_card0",
+        "status": "failed",
+        "detail": "/dev/dri/card0: Permission denied (os error 13)"
+      },
+      {
+        "name": "physical_gdm_scanout_and_input",
+        "status": "not_run",
+        "detail": "Inspection does not exercise physical Intel/AMD GDM, user transitions, visible composition, or input."
+      }
+    ],
+    "warnings": [
+      "No connected DRM connector found."
+    ]
+  },
+  "captures": [
+    {
+      "display_argument": "card0:1",
+      "exit_code": 1,
+      "error": "permission_denied: DRM card, GETFB2 handles, or PRIME export denied",
+      "output_created": false
+    },
+    {
+      "display_argument": "primary",
+      "exit_code": 1,
+      "error": "no_readable_scanout: no connected display with a readable active mode; inspect device_access checks",
+      "output_created": false
+    }
+  ],
+  "input_without_opt_in_exit": 2,
+  "physical_cases": "not_run"
+}

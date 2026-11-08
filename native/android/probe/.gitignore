@@ -1,0 +1,7 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+artifacts/*.apk
+artifacts/**/*.apk
+artifacts/*.ap_

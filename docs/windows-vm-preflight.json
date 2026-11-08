@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-11-08T07:59:51.4101145Z",
+  "mode": "Preflight",
+  "ready": false,
+  "readiness_scope": "read_only_host_observation_and_manual_vm_plan",
+  "actions_executed": 0,
+  "creation_status": "unsupported_by_this_read_only_helper",
+  "p0_proofs_passed": 0,
+  "guest_os_installed": false,
+  "guest_boot_or_signin_tested": false,
+  "host": {
+    "administrator": false,
+    "hypervisor_present": true,
+    "free_ram_bytes": 5158154240,
+    "workspace_volume_free_bytes": 135847194624,
+    "trusted_hyperv_manifest": "C:\\WINDOWS\\system32\\WindowsPowerShell\\v1.0\\Modules\\Hyper-V\\Hyper-V.psd1",
+    "hyperv_system_manifest_present": false,
+    "hyperv_cmdlets_imported": false,
+    "vm_inventory_queried": false
+  },
+  "blockers": [
+    {
+      "code": "windows_iso_required",
+      "detail": "Provide an existing, legitimately obtained Windows 11 x64 ISO with -IsoPath. No download is performed."
+    },
+    {
+      "code": "administrator_for_manual_setup_required",
+      "detail": "An authorized administrator must provision the VM in Hyper-V Manager. Keep this checkout helper non-elevated; it never requests elevation."
+    },
+    {
+      "code": "memory_low",
+      "detail": "Require 8 GiB currently free RAM: 4 GiB guest plus 4 GiB host headroom. Other workloads are not stopped automatically."
+    },
+    {
+      "code": "hyperv_system_module_missing",
+      "detail": "The fixed Windows System32 Hyper-V module manifest is absent. A running hypervisor alone does not provide a Windows VM management environment."
+    },
+    {
+      "code": "vm_inventory_unverified",
+      "detail": "No Hyper-V module is loaded and no VM/switch query is executed. An administrator must verify DeskHarborP0VM and DeskHarborP0Private are unused in Hyper-V Manager."
+    },
+    {
+      "code": "protected_vm_storage_unverified",
+      "detail": "Administrator-owned VM storage and its free space/ACL must be verified in Hyper-V Manager; workspace write permissions are not sufficient."
+    }
+  ],
+  "plan": {
+    "vm_name": "DeskHarborP0VM",
+    "switch_name": "DeskHarborP0Private",
+    "switch_type": "Private",
+    "generation": 2,
+    "secure_boot": true,
+    "secure_boot_template": "MicrosoftWindows",
+    "vtpm": true,
+    "guest_memory_bytes": 4294967296,
+    "processor_count": 2,
+    "dynamic_disk_bytes": 68719476736,
+    "required_free_ram_bytes": 8589934592,
+    "required_free_disk_bytes": 85899345920,
+    "workspace_review_notes_only": "C:\\Users\\govin\\Documents\\Codex\\2026-11-08\\de\\work\\deskharbor\\windows-vm-lab",
+    "vm_storage": "Hyper-V administrator-managed protected default storage; never the workspace",
+    "iso_path": null,
+    "start_vm": false,
+    "automatic_start": "Nothing",
+    "host_feature_changes": false,
+    "network_uplink": false,
+    "downloads": false,
+    "steps": [
+      "Administrator opens trusted Hyper-V Manager outside this helper",
+      "Verify fixed VM/switch names unused; leave existing objects untouched",
+      "Verify administrator-managed protected default VM storage and 80 GiB free",
+      "Create a new Private switch with no external adapter",
+      "Create a new Generation 2 VM with a dynamic 64 GiB VHDX in that protected storage",
+      "Set fixed 4 GiB memory / two processors and disable automatic startup",
+      "Enable Microsoft Windows Secure Boot and vTPM in VM settings",
+      "Attach provided Windows 11 ISO to guest DVD",
+      "Guest installation, boot, service provisioning and sign-in testing remain separate operator actions and not_run"
+    ]
+  },
+  "created_resources": []
+}

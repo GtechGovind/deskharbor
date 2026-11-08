@@ -1,0 +1,3 @@
+<resources>
+    <string name="accessibility_description">Optional local test only. When you enable this in Android Settings, the probe can tap its own visible test target during an attended capture session. It does not read window text. Disable after testing.</string>
+</resources>

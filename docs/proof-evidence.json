@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "build_id": "p0-probe-sha256:2cc90eb76a46fa89c8e3c9f297c772a4b7aa35c0d4519e431e17bf29276ecdb0",
+  "proofs": [
+    {
+      "id": "windows_boot_sign_in",
+      "profile": "windows_11_x64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "windows_lock_unlock",
+      "profile": "windows_11_x64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "windows_logout",
+      "profile": "windows_11_x64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "windows_uac",
+      "profile": "windows_11_x64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "windows_sas",
+      "profile": "windows_11_x64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "windows_gui_independent",
+      "profile": "windows_11_x64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "mac_arm64_loginwindow",
+      "profile": "macos_arm64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "mac_arm64_logout",
+      "profile": "macos_arm64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "mac_arm64_second_user",
+      "profile": "macos_arm64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "mac_arm64_permission_revocation",
+      "profile": "macos_arm64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "mac_intel_loginwindow",
+      "profile": "macos_x64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "mac_intel_logout",
+      "profile": "macos_x64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "mac_intel_second_user",
+      "profile": "macos_x64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "mac_intel_permission_revocation",
+      "profile": "macos_x64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "linux_intel_gdm",
+      "profile": "ubuntu_24_04_intel",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "linux_intel_complete_planes",
+      "profile": "ubuntu_24_04_intel",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "linux_intel_input_transitions",
+      "profile": "ubuntu_24_04_intel",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "linux_amd_gdm",
+      "profile": "ubuntu_24_04_amd",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "linux_amd_complete_planes",
+      "profile": "ubuntu_24_04_amd",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "linux_amd_input_transitions",
+      "profile": "ubuntu_24_04_amd",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "android_consent",
+      "profile": "android_arm64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "android_foreground",
+      "profile": "android_arm64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "android_input_permission",
+      "profile": "android_arm64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    },
+    {
+      "id": "android_capture_stop",
+      "profile": "android_arm64",
+      "environment": "",
+      "status": "not_run",
+      "observations": "",
+      "artifacts": [],
+      "attestation": null
+    }
+  ]
+}
