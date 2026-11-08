@@ -8,10 +8,25 @@ static BOOL DHInteger(id value) {
 @interface DHTexture : NSObject<FlutterTexture>
 @property(nonatomic) uint32_t session;
 @property(nonatomic) CVPixelBufferRef pixels;
+@property(nonatomic) CVPixelBufferRef blank;
+- (void)clear;
 @end
 @implementation DHTexture
+- (instancetype)init {
+ self=[super init];
+ if(self) {
+  CVReturn status=CVPixelBufferCreate(kCFAllocatorDefault,1,1,kCVPixelFormatType_32BGRA,(__bridge CFDictionaryRef)@{(id)kCVPixelBufferIOSurfacePropertiesKey:@{}},&_blank);
+  if(status==kCVReturnSuccess)status=CVPixelBufferLockBaseAddress(_blank,0);
+  if(status==kCVReturnSuccess) {
+   memset(CVPixelBufferGetBaseAddress(_blank),0,CVPixelBufferGetDataSize(_blank));
+   CVPixelBufferUnlockBaseAddress(_blank,0);_pixels=CVPixelBufferRetain(_blank);
+  } else {if(_blank)CVPixelBufferRelease(_blank);_blank=NULL;}
+ }
+ return self;
+}
+- (void)clear { @synchronized(self) {if(_pixels)CVPixelBufferRelease(_pixels);_pixels=_blank?CVPixelBufferRetain(_blank):NULL;} }
 - (CVPixelBufferRef)copyPixelBuffer { @synchronized(self) {return self.pixels ? CVPixelBufferRetain(self.pixels) : NULL;} }
-- (void)dealloc {if(_pixels)CVPixelBufferRelease(_pixels);}
+- (void)dealloc {if(_pixels)CVPixelBufferRelease(_pixels);if(_blank)CVPixelBufferRelease(_blank);}
 @end
 @interface NativeSurfacesPlugin ()
 @property(nonatomic,strong) NSObject<FlutterTextureRegistry>* registry;
@@ -20,7 +35,7 @@ static BOOL DHInteger(id value) {
 @end
 @implementation NativeSurfacesPlugin
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
- NativeSurfacesPlugin* plugin=[NativeSurfacesPlugin new];plugin.registry=registrar.textures;plugin.surfaces=[NSMutableDictionary new];plugin.api=dh_load_api();
+ NativeSurfacesPlugin* plugin=[NativeSurfacesPlugin new];plugin.registry=registrar.textures;plugin.surfaces=[NSMutableDictionary new];plugin.api=(DhApi){0};
  FlutterMethodChannel* channel=[FlutterMethodChannel methodChannelWithName:@"deskharbor/native_surfaces" binaryMessenger:registrar.messenger];
  [registrar addMethodCallDelegate:plugin channel:channel];
 }
@@ -30,8 +45,11 @@ static BOOL DHInteger(id value) {
  if([method isEqualToString:@"createTexture"]){
   NSNumber* sid=args[@"sessionId"];
   if(!DHInteger(sid)||sid.longLongValue<0||sid.unsignedLongLongValue>UINT32_MAX){result([FlutterError errorWithCode:@"bad_arguments" message:@"sessionId must be uint32" details:nil]);return;}
+  if(!_api.acquire||!_api.release)_api=dh_load_api();
   if(!_api.acquire||!_api.release){result([FlutterError errorWithCode:@"library_unavailable" message:@"libdh_ffi.dylib frame ABI unavailable" details:nil]);return;}
-  DHTexture* t=[DHTexture new];t.session=sid.unsignedIntValue;int64_t tid=[_registry registerTexture:t];
+  DHTexture* t=[DHTexture new];
+  if(!t.blank){result([FlutterError errorWithCode:@"texture_unavailable" message:@"Native clear buffer allocation failed" details:nil]);return;}
+  t.session=sid.unsignedIntValue;int64_t tid=[_registry registerTexture:t];
   if(tid<0){result([FlutterError errorWithCode:@"texture_unavailable" message:@"Texture registration failed" details:nil]);return;}
   _surfaces[@(tid)]=t;result(@(tid));return;
  }
@@ -39,8 +57,8 @@ static BOOL DHInteger(id value) {
  NSNumber* tid=args[@"textureId"];DHTexture* t=DHInteger(tid)?_surfaces[tid]:nil;
  if(!t){result([FlutterError errorWithCode:@"texture_unavailable" message:@"Unknown texture" details:nil]);return;}
  if([method isEqualToString:@"disposeTexture"]){[_registry unregisterTexture:tid.longLongValue];[_surfaces removeObjectForKey:tid];result(nil);return;}
- DhFrame f={0};if(!_api.acquire(t.session,&f)){result([FlutterError errorWithCode:@"frame_unavailable" message:@"No decoded frame" details:nil]);return;}
- if(!dh_frame_valid(&f)){_api.release(f.lease);result([FlutterError errorWithCode:@"invalid_frame" message:@"Malformed RGBA frame" details:nil]);return;}
+ DhFrame f={0};if(!_api.acquire(t.session,&f)){[t clear];[_registry textureFrameAvailable:tid.longLongValue];result([FlutterError errorWithCode:@"frame_unavailable" message:@"No decoded frame" details:nil]);return;}
+ if(!dh_frame_valid(&f)){_api.release(f.lease);[t clear];[_registry textureFrameAvailable:tid.longLongValue];result([FlutterError errorWithCode:@"invalid_frame" message:@"Malformed RGBA frame" details:nil]);return;}
  CVPixelBufferRef pixel=NULL;
  CVReturn status=CVPixelBufferCreate(kCFAllocatorDefault,f.width,f.height,kCVPixelFormatType_32BGRA,(__bridge CFDictionaryRef)@{(id)kCVPixelBufferIOSurfacePropertiesKey:@{}},&pixel);
  if(status==kCVReturnSuccess)status=CVPixelBufferLockBaseAddress(pixel,0);
@@ -52,7 +70,7 @@ static BOOL DHInteger(id value) {
  }
  // Native copy has finished reading Rust memory; CVPixelBuffer owns the result.
  _api.release(f.lease);
- if(status!=kCVReturnSuccess){if(pixel)CVPixelBufferRelease(pixel);result([FlutterError errorWithCode:@"texture_unavailable" message:@"CVPixelBuffer allocation failed" details:nil]);return;}
+ if(status!=kCVReturnSuccess){if(pixel)CVPixelBufferRelease(pixel);[t clear];[_registry textureFrameAvailable:tid.longLongValue];result([FlutterError errorWithCode:@"texture_unavailable" message:@"CVPixelBuffer allocation failed" details:nil]);return;}
  @synchronized(t){if(t.pixels)CVPixelBufferRelease(t.pixels);t.pixels=pixel;}
  [_registry textureFrameAvailable:tid.longLongValue];result(nil);
 }
