@@ -37,6 +37,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dh-media"
+version = "0.0.1"
+
+[[package]]
 name = "dh-platform"
 version = "0.0.1"
 dependencies = [
