@@ -138,12 +138,12 @@ impl Receiver {
     ) -> Result<(), TransferError> {
         self.finish_authorized(context, overwrite_approved, || Ok(()))
     }
-    /// Recheck the live broker authority after staging and keep it through atomic publication.
+    /// Recheck live authority while verifying and staging, then hold it through atomic publication.
     pub fn finish_authorized<G>(
         &mut self,
         context: &UserContext,
         overwrite_approved: bool,
-        guard: impl FnOnce() -> Result<G, TransferError>,
+        mut guard: impl FnMut() -> Result<G, TransferError>,
     ) -> Result<(), TransferError> {
         self.check(context)?;
         if self.offset != self.offer.size || self.file.metadata()?.len() != self.offer.size {
@@ -151,12 +151,13 @@ impl Receiver {
         }
         self.file.seek(SeekFrom::Start(0))?;
         let mut hasher = blake3::Hasher::new();
-        let mut buffer = [0; 64 * 1024];
+        let mut buffer = vec![0; CHUNK_SIZE];
         loop {
             let n = self.file.read(&mut buffer)?;
             if n == 0 {
                 break;
             }
+            let _authority = guard()?;
             hasher.update(&buffer[..n]);
         }
         if *hasher.finalize().as_bytes() != self.offer.checksum {
@@ -169,18 +170,29 @@ impl Receiver {
             .map(|b| format!("{b:02x}"))
             .collect::<String>();
         let staging = format!(".deskharbor-{suffix}.part");
-        let mut output = self
-            .root
-            .open_with(&staging, OpenOptions::new().write(true).create_new(true))?;
-        let result = (|| {
+        let mut output = {
+            let _authority = guard()?;
+            self.root
+                .open_with(&staging, OpenOptions::new().write(true).create_new(true))?
+        };
+        let result = (|| -> Result<(), TransferError> {
             self.file.seek(SeekFrom::Start(0))?;
-            std::io::copy(&mut self.file, &mut output)?;
-            output.sync_all()
+            let mut staging_buffer = vec![0; CHUNK_SIZE];
+            loop {
+                let n = self.file.read(&mut staging_buffer)?;
+                if n == 0 {
+                    break;
+                }
+                let _authority = guard()?;
+                output.write_all(&staging_buffer[..n])?;
+            }
+            output.sync_all()?;
+            Ok(())
         })();
         drop(output);
         if let Err(error) = result {
             let _ = self.root.remove_file(&staging);
-            return Err(error.into());
+            return Err(error);
         }
         let _authority = match guard() {
             Ok(g) => g,

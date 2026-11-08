@@ -296,13 +296,19 @@ pub(super) async fn receive(
             Some(Body::TransferState(s))
                 if s.id == id && s.offset == offset && s.state == "finish" =>
             {
-                let result = rx.finish_authorized(&ctx, false, || {
-                    let guard = h.refresh();
-                    guard
-                        .check(&b, crate::Operation::Files, epoch, layout)
-                        .map_err(|_| dh_transfer::TransferError::Context)?;
-                    Ok(guard)
-                });
+                let host = h.clone();
+                let binding = b.clone();
+                let result = tokio::task::spawn_blocking(move || {
+                    rx.finish_authorized(&ctx, false, || {
+                        let guard = host.refresh();
+                        guard
+                            .check(&binding, crate::Operation::Files, epoch, layout)
+                            .map_err(|_| dh_transfer::TransferError::Context)?;
+                        Ok(guard)
+                    })
+                })
+                .await
+                .map_err(|_| invalid())?;
                 let reply = match result {
                     Ok(()) => Body::TransferState(TransferState {
                         id,
