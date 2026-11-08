@@ -32,7 +32,7 @@
 |3 Linux | DRM inventory; sandboxed restricted linear scanout and F24 helper; Rust/C tests; WSL denied-device/no-display checks | Trusted installed broker; complete plane/modifier composition; physical Ubuntu24.04 Intel/AMD/GDM and transition input |
 |4 Android | Real attended Kotlin APK;11 lifecycle/consent/resource JVM tests; API37x86_64 emulator consent/capture/foreground/stop observations | See Android evidence for exact build/run; accessibility enable/revoke, system stop/lock/protected content and physical ARM64 coverage remain unqualified |
 |5 macOS/lab runner | Swift public-API harness/signing command/private launchd collectors; structured role/context gate; Python read-only collector3tests | First Swift native build; actual signed installs and LoginWindow/Aqua proofs on both architectures |
-|6 review/handoff | Independent read-only initial and final review; substantive findings fixed; Windows20 and Linux15 Rust/CLI tests,3nativeC programs,11AndroidJVM tests,3Python tests; strictRustClippy/format verified | Final artifact packaging and local commits; full product remains blocked |
+|6 review/handoff | Independent read-only initial and final review; substantive findings fixed; Windows20 and Linux15 Rust/CLI tests,3nativeC programs,11AndroidJVM tests,3Python tests; strictRustClippy/format verified; source committed at66f0d32; source/probe ZIPs inspected and hashes checked; private Windows screenshot excluded | Full product and native qualification remain blocked |
 
 ## Evidence and review
 
@@ -49,5 +49,7 @@
 `docs/proof-gate.json` records **ready=false, passed=0, required=24** and exit2. The cases are required platform proofs; Windows lifecycle testing may use a real isolated Windows11 VM. A VM has not yet been created or tested here. WSL and the x86 Android emulator do not establish the selected physical GPU/ARM64 support matrix.
 
 The user's virtual-sign-in follow-up is accepted: investigate and prepare an isolated Windows VM rather than signing out the user's workstation. Preflight found virtualization active, no installed desktop VM manager or Windows image, and under2GiB free RAM during the existing test run. VM preparation does not convert an unrun sign-in test into a passed case.
+
+After the task-owned Android emulator shut down, observed free memory recovered to about5GiB, still below the8GiB lab margin. The final read-only VM script tests pass. No VM was created, booted or signed in. Its manual Hyper-V Manager procedure and actual blockers are in windows-proof.md/windows-vm-preflight.json.
 
 Milestones1–5 are **pending** under the user's explicit P0 ordering. No Flutter viewer, password authentication, transport, installed production host, clipboard/files, performance claim or release installer is reported complete.

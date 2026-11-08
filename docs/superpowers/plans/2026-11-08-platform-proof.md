@@ -80,7 +80,7 @@ Files: `native/macos/`, macOS proof docs, `tests/lab/` and scripts.
 
 - [x] Run all available checks; inspect output; document unavailable tests by name.
 - [x] Obtain independent code review and address substantive findings with regression tests.
-- [ ] Commit source, lockfile, tests and ledger; package probe binaries/APK if built.
+- [x] Commit source, lockfile, tests and ledger; package probe binaries/APK if built.
 - [x] Do not advance to Milestone1 while required P0 proofs remain unsatisfied.
 
 Virtual-sign-in follow-up: read-only VM preflight/plan and guarded manual Hyper-V Manager procedure added and independently reviewed. No creation path executes from this user-owned checkout. No VM or guest sign-in has run. The platform gate remains0/24; this checklist tracks diagnostic implementation, not product acceptance.
