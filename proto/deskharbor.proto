@@ -1,0 +1,44 @@
+syntax = "proto3";
+package deskharbor;
+
+message Envelope {
+  uint64 request_id = 1;
+  oneof body {
+    Hello hello = 10;
+    AuthStart auth_start = 11;
+    AuthChallenge auth_challenge = 12;
+    AuthFinish auth_finish = 13;
+    SessionReady session_ready = 14;
+    Failure failure = 15;
+    Input input = 16;
+    Clipboard clipboard = 17;
+    TransferOffer transfer_offer = 18;
+    TransferChunk transfer_chunk = 19;
+    Command command = 20;
+    HostStatus host_status = 21;
+    VideoFrame video_frame = 22;
+    TransferState transfer_state = 23;
+    AuthAccepted auth_accepted = 24;
+  }
+}
+message Hello { uint32 version = 1; bytes host_identity = 2; bytes nonce = 3; repeated string capabilities = 4; }
+message AuthStart { bytes request = 1; }
+message AuthChallenge { bytes response = 1; }
+message AuthFinish { bytes proof = 1; }
+message AuthAccepted {}
+message SessionReady { bytes session_id = 1; uint64 epoch = 2; uint64 layout = 3; repeated string permissions = 4; }
+message Failure { string code = 1; string message = 2; }
+message Input {
+  uint64 epoch = 1; uint64 layout = 2; string display_id = 3;
+  oneof kind { Pointer pointer = 10; Key key = 11; string text = 12; bool release_all = 13; }
+}
+message Pointer { double x = 1; double y = 2; uint32 buttons = 3; sint32 wheel_x = 4; sint32 wheel_y = 5; }
+message Key { uint32 usb_hid_usage = 1; bool pressed = 2; }
+message Clipboard { bytes origin = 1; uint64 generation = 2; string mime = 3; bytes data = 4; uint64 epoch = 5; }
+message TransferOffer { bytes id = 1; string filename = 2; uint64 size = 3; bytes blake3 = 4; uint64 epoch = 5; }
+message TransferChunk { bytes id = 1; uint64 offset = 2; bytes data = 3; bytes blake3 = 4; }
+message TransferState { bytes id = 1; string state = 2; uint64 offset = 3; string detail = 4; }
+message Command { string name = 1; string argument = 2; uint64 epoch = 3; }
+message HostStatus { string state = 1; uint64 epoch = 2; uint64 layout = 3; repeated Display displays = 4; bool synthetic = 5; }
+message Display { string id = 1; string name = 2; uint32 width = 3; uint32 height = 4; sint32 x = 5; sint32 y = 6; }
+message VideoFrame { uint64 epoch = 1; uint64 layout = 2; string display_id = 3; uint64 sequence = 4; string codec = 5; bool keyframe = 6; uint32 width = 7; uint32 height = 8; bytes data = 9; }

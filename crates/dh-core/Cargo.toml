@@ -1,0 +1,11 @@
+[package]
+name = "dh-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+[dependencies]
+dh-auth = { path = "../dh-auth" }
+dh-protocol = { path = "../dh-protocol" }
+[lints]
+workspace = true

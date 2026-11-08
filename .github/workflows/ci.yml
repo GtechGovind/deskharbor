@@ -1,0 +1,61 @@
+name: Verify source
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, ubuntu-24.04, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Windows tests
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/cargo-msvc.ps1 test --workspace --locked
+      - name: Windows Clippy
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/cargo-msvc.ps1 @('clippy','--workspace','--all-targets','--locked','--','-D','warnings')
+      - name: Unix tests and Clippy
+        if: runner.os != 'Windows'
+        run: |
+          cargo test --workspace --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Linux native fixtures
+        if: runner.os == 'Linux'
+        run: |
+          make -C native/linux BUILD=../../target/debug test
+          cargo test --locked -p dh-platform native_encoder_fixture_matches_rust_composition -- --ignored
+      - name: Build macOS native probe
+        if: runner.os == 'macOS'
+        run: swift build -c release --package-path native/macos
+  android-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build and test attended Android probe
+        working-directory: native/android/probe
+        run: bash gradlew --no-daemon testDebugUnitTest assembleDebug

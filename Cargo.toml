@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/dh-platform", "crates/dh-media", "bins/dh-platform-probe"]
+members = ["crates/dh-platform", "crates/dh-media", "crates/dh-protocol", "crates/dh-auth", "crates/dh-core", "crates/dh-net", "crates/dh-storage", "crates/dh-clipboard", "crates/dh-transfer", "bins/dh-platform-probe"]
 
 [workspace.package]
 version = "0.0.1"
@@ -12,6 +12,13 @@ publish = false
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.145"
 sha2 = "=0.10.9"
+prost = "=0.14.1"
+zeroize = { version = "=1.9.1", features = ["derive"] }
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync", "signal"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std"] }
+thiserror = "=2.0.21"
+blake3 = "=1.8.7"
+tempfile = "=3.27.0"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
