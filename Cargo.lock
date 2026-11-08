@@ -44,6 +44,7 @@ version = "0.0.1"
 name = "dh-platform"
 version = "0.0.1"
 dependencies = [
+ "dh-media",
  "libc",
  "serde",
  "serde_json",

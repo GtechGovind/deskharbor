@@ -14,6 +14,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #include "sandbox.h"
+#include "plane_render.h"
+#include "visibility.h"
 
 #define CARD 3
 #define MAX_OBJECTS 256
@@ -41,16 +43,15 @@ static int decimal(const char *s, uint32_t *n) {
     return 1;
 }
 
-/* File capabilities/setuid on a user-invocable probe are unsupported. A
- * future isolated service may launch a non-root dedicated uid with only
- * CAP_SYS_ADMIN (required by GETFB2). Never acquire or install privilege. */
+/* This best-effort diagnostic must remain unprivileged. Privileged production
+ * capture needs a separately reviewed authorization/coherence arrangement. */
 static int safe_identity(void) {
     struct __user_cap_header_struct h = {.version=_LINUX_CAPABILITY_VERSION_3};
     struct __user_cap_data_struct caps[2] = {0};
-    if (!geteuid() || getuid() != geteuid() || getgid() != getegid() ||
-        getauxval(AT_SECURE) || syscall(SYS_capget, &h, caps) < 0) return 0;
-    return !((caps[0].permitted | caps[0].effective | caps[0].inheritable) & ~(1u << CAP_SYS_ADMIN))
-        && !(caps[1].permitted | caps[1].effective | caps[1].inheritable);
+    uint32_t uid[3],gid[3];
+    if(getresuid(&uid[0],&uid[1],&uid[2]) || getresgid(&gid[0],&gid[1],&gid[2]) || syscall(SYS_capget,&h,caps)<0)return 0;
+    uint32_t words[]={caps[0].effective,caps[0].permitted,caps[0].inheritable,caps[1].effective,caps[1].permitted,caps[1].inheritable};
+    return dh_worker_identity(uid,gid,getauxval(AT_SECURE),words);
 }
 static int open_card(uint32_t minor_id) {
     char path[32];
@@ -65,7 +66,7 @@ static int open_card(uint32_t minor_id) {
     if (syscall(SYS_close_range, 4u, ~0u, 0u) < 0) return SANDBOX;
     return OK;
 }
-static int mode(uint32_t connector, struct state *s) {
+static int mode(uint32_t connector, struct state *s,struct drm_mode_modeinfo *identity) {
     struct drm_mode_modeinfo one_mode;
     /* count_modes > 0 prevents a forced hardware reprobe. */
     struct drm_mode_get_connector c = {.connector_id=connector,.count_modes=1,.modes_ptr=PTR(&one_mode)};
@@ -78,6 +79,8 @@ static int mode(uint32_t connector, struct state *s) {
     struct drm_mode_crtc crtc = {.crtc_id=e.crtc_id};
     if ((rc = request(DRM_IOCTL_MODE_GETCRTC, &crtc))) return rc;
     if (!crtc.mode_valid) return NO_SCANOUT;
+    if((rc=dh_mode_supported(&crtc.mode)))return rc;
+    if(identity)*identity=crtc.mode;
     s->crtc = e.crtc_id;
     s->width = crtc.mode.hdisplay;
     s->height = crtc.mode.vdisplay;
@@ -104,18 +107,25 @@ static int read_name(uint32_t id, char name[DRM_PROP_NAME_LEN]) {
     name[DRM_PROP_NAME_LEN - 1] = 0;
     return OK;
 }
-static int screen_effects(uint32_t id, uint32_t type) {
+static int screen_effects(uint32_t id, uint32_t type,uint32_t crtc,uint64_t *mode_blob) {
     struct properties p;
     int rc = properties(id, type, &p);
     if (rc) return rc;
+    unsigned seen=0;
     for (uint32_t i = 0; i < p.count; i++) {
         char name[DRM_PROP_NAME_LEN];
         if ((rc = read_name(p.ids[i], name))) return rc;
-        if (unsupported_screen_effect(name, p.values[i])) return COMPOSITION;
+        if((rc=dh_object_property(type,name,p.values[i],crtc)))return rc;
+        if(!strcmp(name,"ACTIVE") || !strcmp(name,"DPMS"))seen|=1;
+        if(!strcmp(name,"MODE_ID") || !strcmp(name,"CRTC_ID"))seen|=2;
+        if(mode_blob && !strcmp(name,"MODE_ID"))*mode_blob=p.values[i];
     }
-    return OK;
+    return seen==3?OK:UNAVAILABLE;
 }
-static int plane_state(uint32_t id, struct state *s) {
+struct dh_snapshot { uint32_t crtc,width,height,count;uint64_t mode_blob;struct drm_mode_modeinfo mode;struct dh_plane planes[DH_MAX_PLANES]; };
+
+static int plane_state(uint32_t id, struct dh_plane *plane) {
+    struct state *s=&plane->state;
     struct properties p;
     int rc = properties(id, DRM_MODE_OBJECT_PLANE, &p);
     if (rc) return rc;
@@ -129,9 +139,12 @@ static int plane_state(uint32_t id, struct state *s) {
     for (uint32_t i = 0; i < p.count; i++) {
         char name[DRM_PROP_NAME_LEN];
         if ((rc = read_name(p.ids[i], name))) return rc;
-        if (!strcmp(name, "FB_ID") && p.values[i] != s->fb) return CHANGED;
-        if (!strcmp(name, "CRTC_ID") && p.values[i] != s->crtc) return CHANGED;
+        if ((rc = dh_plane_property(name,p.values[i])))return rc;
+        if (!strcmp(name, "FB_ID")) {if(p.values[i]!=s->fb)return CHANGED;seen|=1u<<11;}
+        if (!strcmp(name, "CRTC_ID")) {if(p.values[i]!=s->crtc)return CHANGED;seen|=1u<<12;}
         if (!strcmp(name, "COLOR_PIPELINE") && p.values[i]) return COMPOSITION;
+        if (!strcmp(name,"zpos")) {plane->z=p.values[i];plane->has_z=1;}
+        if (!strcmp(name,"pixel blend mode")) {plane->blend=p.values[i];plane->has_blend=1;}
         for (unsigned j = 0; j < sizeof fields / sizeof fields[0]; ++j) {
             if (!strcmp(name, fields[j].name)) {
                 *fields[j].dest = p.values[i];
@@ -139,14 +152,17 @@ static int plane_state(uint32_t id, struct state *s) {
             }
         }
     }
-    return (seen & 0x1ff) == 0x1ff ? OK : GEOMETRY;
+    return (seen & 0x19ff) == 0x19ff ? OK : GEOMETRY;
 }
-static int snapshot(uint32_t connector, struct state *s) {
+static int snapshot(uint32_t connector, struct dh_snapshot *s) {
     memset(s, 0, sizeof *s);
-    int rc = mode(connector, s);
+    struct state active={0};
+    int rc = mode(connector, &active,&s->mode);
     if (rc) return rc;
-    if ((rc = screen_effects(s->crtc, DRM_MODE_OBJECT_CRTC))) return rc;
-    if ((rc = screen_effects(connector, DRM_MODE_OBJECT_CONNECTOR))) return rc;
+    s->crtc=active.crtc;s->width=active.width;s->height=active.height;
+    if(!s->width || !s->height || s->width>16384 || s->height>16384 || (uint64_t)s->width*s->height*4>CAPTURE_LIMIT)return INVALID_BUFFER;
+    if ((rc = screen_effects(s->crtc, DRM_MODE_OBJECT_CRTC,s->crtc,&s->mode_blob))) return rc;
+    if ((rc = screen_effects(connector, DRM_MODE_OBJECT_CONNECTOR,s->crtc,NULL))) return rc;
     uint32_t ids[MAX_OBJECTS];
     struct drm_mode_get_plane_res planes = {.plane_id_ptr=PTR(ids),.count_planes=MAX_OBJECTS};
     if ((rc = request(DRM_IOCTL_MODE_GETPLANERESOURCES, &planes))) return rc;
@@ -155,11 +171,22 @@ static int snapshot(uint32_t connector, struct state *s) {
         struct drm_mode_get_plane plane = {.plane_id=ids[i]};
         if ((rc = request(DRM_IOCTL_MODE_GETPLANE, &plane))) return rc;
         if (plane.crtc_id != s->crtc || !plane.fb_id) continue;
-        if (++s->planes != 1) return COMPOSITION;
-        s->fb = plane.fb_id;
-        if ((rc = plane_state(ids[i], s))) return rc;
+        if(s->count==DH_MAX_PLANES)return COMPOSITION;
+        struct dh_plane *p=&s->planes[s->count++];
+        p->id=ids[i];p->state.crtc=s->crtc;p->state.fb=plane.fb_id;
+        p->state.width=s->width;p->state.height=s->height;p->state.planes=1;
+        if ((rc = plane_state(ids[i], p))) return rc;
     }
-    return eligible(s);
+    if(!s->count)return NO_SCANOUT;
+    unsigned primary=0;
+    for(uint32_t i=0;i<s->count;i++) {
+        const struct dh_plane *p=&s->planes[i];
+        if(p->state.type==1)primary++;
+        if(p->state.type>2 || (s->count>1 && !p->has_z) || p->z>INT32_MAX)return COMPOSITION;
+        for(uint32_t j=0;j<i;j++)if(s->planes[j].id==p->id || s->planes[j].z==p->z)return COMPOSITION;
+        if(p->state.type==1)for(uint32_t j=0;j<s->count;j++)if(s->planes[j].z<p->z)return COMPOSITION;
+    }
+    return primary==1?OK:COMPOSITION;
 }
 static int send_all(const void *data, size_t length) {
     const uint8_t *p = data;
@@ -177,13 +204,15 @@ static int sync_dma(int fd, uint64_t flags) {
     do { rc = ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync); } while (rc < 0 && (errno == EINTR || errno == EAGAIN));
     return rc < 0 ? failure() : OK;
 }
-static int capture(uint32_t connector, struct state *before) {
-    int rc = snapshot(connector, before);
-    if (rc) return rc;
-    struct drm_mode_fb_cmd2 fb = {.fb_id=before->fb};
+static int capture_plane(const struct dh_snapshot *snapshot, const struct dh_plane *plane, uint32_t remaining, struct dh_image *image) {
+    int rc;
+    struct drm_mode_fb_cmd2 fb = {.fb_id=plane->state.fb};
     if ((rc = request(DRM_IOCTL_MODE_GETFB2, &fb))) return rc;
-    size_t bytes;
-    if ((rc = extent(&fb, before, &bytes))) return rc;
+    size_t bytes=0;
+    if ((rc = dh_source_extent(&fb,&bytes))) return rc;
+    if ((rc = dh_record(plane,&fb,snapshot->width,snapshot->height,snapshot->count,image->record)))return rc;
+    image->bytes=fb.width*fb.height*4;
+    if(image->bytes>remaining)return INVALID_BUFFER;
     if (!fb.handles[0]) return PERMISSION;
     struct drm_prime_handle prime = {.handle=fb.handles[0],.flags=DRM_CLOEXEC,.fd=-1};
     if ((rc = request(DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime))) return rc;
@@ -194,18 +223,36 @@ static int capture(uint32_t connector, struct state *before) {
     if (backing < 0 || (uint64_t)backing < bytes) return INVALID_BUFFER;
     uint8_t *mapping = mmap(NULL, bytes, PROT_READ, MAP_SHARED, prime.fd, 0);
     if (mapping == MAP_FAILED) return failure();
+    image->pixels=malloc(image->bytes);
+    if(!image->pixels)return INVALID_BUFFER;
     if ((rc = sync_dma(prime.fd, DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ))) return rc;
-    size_t length = (size_t)fb.width * fb.height * 4;
-    uint8_t *pixels = malloc(length);
-    if (!pixels) return INVALID_BUFFER;
-    unpack(&fb, mapping, pixels);
+    for(uint32_t y=0;y<fb.height;y++)memcpy(image->pixels+(size_t)y*fb.width*4,
+        mapping+fb.offsets[0]+(size_t)y*fb.pitches[0],(size_t)fb.width*4);
     if ((rc = sync_dma(prime.fd, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ))) return rc;
-    struct state after;
+    if(munmap(mapping,bytes) || close(prime.fd))return UNAVAILABLE;
+    return OK;
+}
+static int capture(uint32_t connector) {
+    struct dh_snapshot before,after;
+    int rc=snapshot(connector,&before);
+    if(rc)return rc;
+    struct dh_image images[DH_MAX_PLANES]={0};
+    uint32_t total=0;
+    for(uint32_t i=0;i<before.count;i++) {
+        if((rc=capture_plane(&before,&before.planes[i],CAPTURE_LIMIT-total,&images[i])))return rc;
+        total+=images[i].bytes;
+    }
     if ((rc = snapshot(connector, &after))) return rc;
-    if (memcmp(before, &after, sizeof after)) return CHANGED;
-    uint32_t header[] = {0x31464844, fb.width, fb.height};
-    if ((rc = send_all(header, sizeof header))) return rc;
-    return send_all(pixels, length);
+    if (memcmp(&before, &after, sizeof after)) return CHANGED;
+    /* Raw backing buffers never cross the trusted capture boundary. */
+    rc=dh_emit_visible(send_all,before.width,before.height,images,before.count);
+    for(uint32_t i=0;i<before.count;i++)free(images[i].pixels);
+    return rc;
+}
+static int set_cap(uint64_t capability) {
+    struct drm_set_client_cap cap={.capability=capability,.value=1};
+    int rc;do {rc=ioctl(CARD,DRM_IOCTL_SET_CLIENT_CAP,&cap);}while(rc<0 && errno==EINTR);
+    return rc<0?(errno?errno:EIO):0;
 }
 int main(int argc, char **argv) {
     uint32_t card, connector;
@@ -222,11 +269,10 @@ int main(int argc, char **argv) {
     if (lockdown()) return SANDBOX;
     struct state state = {0};
     if (!strcmp(argv[1], "mode")) {
-        if ((rc = mode(connector, &state))) return rc;
+        if ((rc = mode(connector, &state,NULL))) return rc;
         uint32_t header[] = {0x31464844, state.width, state.height};
         return send_all(header, sizeof header);
     }
-    struct drm_set_client_cap cap = {.capability=DRM_CLIENT_CAP_ATOMIC,.value=1};
-    if ((rc = request(DRM_IOCTL_SET_CLIENT_CAP, &cap))) return rc;
-    return capture(connector, &state);
+    if((rc=dh_visibility_caps(set_cap)))return rc;
+    return capture(connector);
 }

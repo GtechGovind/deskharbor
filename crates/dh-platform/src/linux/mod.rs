@@ -1,3 +1,5 @@
+mod packet;
+
 use crate::{
     frame::Frame,
     report::{Check, CheckStatus, Display, Inspection, Platform, ProbeError, SessionKind},
@@ -5,7 +7,6 @@ use crate::{
 use std::{
     ffi::CString,
     fs,
-    io::Read,
     os::unix::ffi::OsStrExt,
     path::Path,
     process::{Command, Stdio},
@@ -119,6 +120,9 @@ fn header(packet: &[u8]) -> Result<(u32, u32), ProbeError> {
 }
 
 fn decode(id: String, packet: &[u8]) -> Result<Frame, ProbeError> {
+    if packet.starts_with(b"DHP2") {
+        return self::packet::decode(id, packet);
+    }
     let (w, h) = header(packet)?;
     let size = u64::from(w) * u64::from(h);
     if size > MAX_PAYLOAD / 4 || packet.len() as u64 != 12 + size * 4 {
@@ -143,7 +147,7 @@ fn worker_error(status: Option<i32>) -> ProbeError {
         ),
         Some(5) => (
             "unsupported_composition",
-            "active cursor/overlay, color transform, protection, or nonopaque primary",
+            "ambiguous plane order, unknown/effective color or protection property, or incomplete/nonopaque primary",
         ),
         Some(6) => (
             "unsupported_geometry",
@@ -155,7 +159,7 @@ fn worker_error(status: Option<i32>) -> ProbeError {
         ),
         Some(8) => (
             "unsupported_format",
-            "capture requires single-plane XRGB8888",
+            "capture requires supported packed linear XRGB8888/ARGB8888 sources",
         ),
         Some(9) => (
             "invalid_buffer",
@@ -192,29 +196,22 @@ fn run_worker(action: &str, card: u32, connector: u32) -> Result<Vec<u8>, ProbeE
                 format!("build dh-drm-worker beside the probe: {e}"),
             )
         })?;
-    let mut data = Vec::new();
-    let limit = if action == "mode" {
-        12
-    } else {
-        12 + MAX_PAYLOAD
-    };
-    let read = child
-        .stdout
-        .take()
-        .unwrap()
-        .take(limit + 1)
-        .read_to_end(&mut data);
+    let mut stdout = child.stdout.take().expect("piped child stdout");
+    let read = packet::read_packet(&mut stdout, action == "mode");
+    drop(stdout);
+    if read.is_err() {
+        let _ = child.kill();
+    }
     let status = child
         .wait()
         .map_err(|e| ProbeError::new("drm_unavailable", e.to_string()))?;
-    read.map_err(|e| ProbeError::new("worker_protocol", e.to_string()))?;
     if !status.success() {
+        if status.code().is_none() {
+            return Err(read.err().unwrap_or_else(|| worker_error(None)));
+        }
         return Err(worker_error(status.code()));
     }
-    if data.len() as u64 > limit {
-        return Err(malformed());
-    }
-    Ok(data)
+    read
 }
 
 fn read_text(path: impl AsRef<Path>) -> Option<String> {
@@ -290,7 +287,7 @@ pub fn inspect() -> Result<Inspection, ProbeError> {
         .unwrap_or("Linux")
         .trim_matches('"');
     let mut checks = Vec::new();
-    let mut warnings = Vec::new();
+    let mut warnings = vec!["Capture is an unprivileged, best-effort diagnostic. Matching endpoint metadata and DMA-BUF CPU synchronization do not prevent concurrent writers or A-to-B-to-A commits. No coherent or privileged production capture is qualified.".into()];
     let mut displays = Vec::new();
     match fs::read_dir("/sys/class/drm") {
         Err(e) => warnings.push(format!("DRM sysfs unavailable: {e}")),

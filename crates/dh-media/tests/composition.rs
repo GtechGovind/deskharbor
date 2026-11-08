@@ -164,7 +164,9 @@ fn quarter_turns_and_source_reflection_match_asymmetric_fixture() {
         assert_eq!(
             result
                 .pixels_rgba
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .map(|p| p[0])
                 .collect::<Vec<_>>(),
             expected

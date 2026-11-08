@@ -26,7 +26,7 @@ The debug APK is an attended, local screen-capture proof with an explicit Stop b
 
 ## Linux and macOS
 
-See [Linux build/proof details](linux-proof.md) and [macOS signed-harness details](macos-proof.md). The Linux worker supports only a restricted explicitly linear single-plane diagnostic path and fails on unsupported composition; complete GNOME/GDM capture is unfinished. Linux binaries built on Ubuntu26.04 WSL are not qualified Ubuntu24.04 packages. The Swift harness has not been compiled or run here.
+See [Linux build/proof details](linux-proof.md) and [macOS signed-harness details](macos-proof.md). The Linux source now has a restricted linear multi-plane diagnostic path with visible-only publication; unknown layouts/color/driver state fail explicitly and coherent privileged GNOME/GDM capture remains unfinished/disabled. Earlier ZIP binaries describe their recorded single-plane revision. Linux binaries built on Ubuntu26.04 WSL are not qualified Ubuntu24.04 packages. The Swift harness has not been compiled or run here.
 
 ## Evidence collection and gate
 
