@@ -28,3 +28,4 @@ pub enum NetError {
 pub(crate) const EXPORTER_LABEL: &[u8] = b"EXPORTER-DeskHarbor-Authentication-v1";
 pub(crate) const EXPORTER_CONTEXT: &[u8] = b"deskharbor/1";
 pub(crate) const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+mod attachment;

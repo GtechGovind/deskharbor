@@ -4,8 +4,33 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+
+[features]
+vp8 = ["dh-media/vp8", "dep:dh-net", "dep:dh-platform", "dep:dh-storage", "dep:dh-clipboard", "dep:dh-transfer", "dep:dh-media", "dep:tokio", "dep:zeroize", "dep:serde", "dep:serde_json", "dep:rusqlite", "dep:blake3", "dep:ring"]
+
 [dependencies]
 dh-auth = { path = "../dh-auth" }
 dh-protocol = { path = "../dh-protocol" }
+dh-net = { path = "../dh-net", optional = true }
+dh-platform = { path = "../dh-platform", optional = true }
+dh-storage = { path = "../dh-storage", optional = true }
+dh-clipboard = { path = "../dh-clipboard", optional = true }
+dh-transfer = { path = "../dh-transfer", optional = true }
+dh-media = { path = "../dh-media", optional = true }
+tokio = { workspace = true, optional = true }
+zeroize = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+blake3 = { workspace = true, optional = true }
+rusqlite = { version = "=0.41.1", optional = true }
+ring = { version = "=0.17.14", optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[[test]]
+name = "engine"
+required-features = ["vp8"]
+
 [lints]
 workspace = true

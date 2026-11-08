@@ -1,0 +1,15 @@
+[package]
+name="dh-cli"
+version.workspace=true
+edition.workspace=true
+rust-version.workspace=true
+publish.workspace=true
+
+[dependencies]
+dh-core={path="../../crates/dh-core",features=["vp8"]}
+tokio.workspace=true
+serde_json.workspace=true
+zeroize.workspace=true
+
+[lints]
+workspace=true

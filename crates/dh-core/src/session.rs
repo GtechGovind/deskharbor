@@ -50,9 +50,12 @@ pub struct Broker {
 }
 impl Broker {
     pub fn new(state: HostState) -> Self {
+        Self::with_epoch(state, 1)
+    }
+    pub(crate) fn with_epoch(state: HostState, epoch: u64) -> Self {
         Self {
             state,
-            epoch: 1,
+            epoch,
             layout: 1,
             controller: None,
             keys: BTreeSet::new(),

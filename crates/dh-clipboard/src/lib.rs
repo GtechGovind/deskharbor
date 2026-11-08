@@ -21,6 +21,7 @@ pub struct Update {
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 #[error("invalid clipboard update")]
 pub struct ClipboardError;
+#[derive(Clone)]
 pub struct ClipboardSync {
     origin: [u8; 16],
     generation: u64,

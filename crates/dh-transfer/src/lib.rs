@@ -1,4 +1,6 @@
+mod directory;
 use cap_std::fs::{Dir, OpenOptions};
+pub use directory::GrantedDirectory;
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
@@ -48,11 +50,17 @@ impl Receiver {
         offer: Offer,
         context: UserContext,
     ) -> Result<Self, TransferError> {
+        Self::begin_in(
+            Dir::open_ambient_dir(root, cap_std::ambient_authority())?,
+            offer,
+            context,
+        )
+    }
+    fn begin_in(root: Dir, offer: Offer, context: UserContext) -> Result<Self, TransferError> {
         validate_name(&offer.filename)?;
         if offer.size > 8 * 1024 * 1024 * 1024 * 1024 || !valid_context(&context) {
             return Err(TransferError::Invalid);
         }
-        let root = Dir::open_ambient_dir(root, cap_std::ambient_authority())?;
         let file = tempfile::tempfile()?;
         Ok(Self {
             root,
@@ -128,6 +136,15 @@ impl Receiver {
         context: &UserContext,
         overwrite_approved: bool,
     ) -> Result<(), TransferError> {
+        self.finish_authorized(context, overwrite_approved, || Ok(()))
+    }
+    /// Recheck the live broker authority after staging and keep it through atomic publication.
+    pub fn finish_authorized<G>(
+        &mut self,
+        context: &UserContext,
+        overwrite_approved: bool,
+        guard: impl FnOnce() -> Result<G, TransferError>,
+    ) -> Result<(), TransferError> {
         self.check(context)?;
         if self.offset != self.offer.size || self.file.metadata()?.len() != self.offer.size {
             return Err(TransferError::Invalid);
@@ -165,6 +182,13 @@ impl Receiver {
             let _ = self.root.remove_file(&staging);
             return Err(error.into());
         }
+        let _authority = match guard() {
+            Ok(g) => g,
+            Err(e) => {
+                let _ = self.root.remove_file(&staging);
+                return Err(e);
+            }
+        };
         let published = if overwrite_approved {
             self.root.rename(&staging, &self.root, &self.offer.filename)
         } else {

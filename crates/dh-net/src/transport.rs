@@ -51,33 +51,47 @@ impl Listener {
         self.tcp.local_addr().expect("bound listener")
     }
     pub async fn accept(&self) -> Result<Channel, NetError> {
+        self.incoming().await?.await
+    }
+    /// Accept the socket separately so stalled handshakes cannot block other peers,
+    /// management commands, or revocation. The caller bounds concurrent handshakes.
+    pub async fn incoming(
+        &self,
+    ) -> Result<
+        std::pin::Pin<Box<dyn std::future::Future<Output = Result<Channel, NetError>> + Send>>,
+        NetError,
+    > {
+        let host = self.host;
         if let Some(endpoint) = &self.quic {
             tokio::select! {
-                incoming=self.tcp.accept()=>{let(stream,_)=incoming?;self.accept_tcp(stream).await},
-                incoming=endpoint.accept()=>{
-                    let incoming=incoming.ok_or(NetError::Protocol("QUIC listener closed"))?;
-                    let connection=tokio::time::timeout(TIMEOUT,incoming).await.map_err(|_|NetError::Timeout)?.map_err(|_|NetError::Protocol("QUIC handshake failed"))?;
-                    let mut exporter=[0;32];connection.export_keying_material(&mut exporter,EXPORTER_LABEL,EXPORTER_CONTEXT).map_err(|_|NetError::Protocol("QUIC exporter failed"))?;
-                    let(send,mut recv)=tokio::time::timeout(TIMEOUT,connection.accept_bi()).await.map_err(|_|NetError::Timeout)?.map_err(|_|NetError::Protocol("QUIC stream failed"))?;
-                    let mut marker=[0;3];
-                    tokio::time::timeout(TIMEOUT,recv.read_exact(&mut marker)).await.map_err(|_|NetError::Timeout)?.map_err(|_|NetError::Protocol("QUIC opening marker"))?;
-                    if &marker!=b"DH1"{return Err(NetError::Protocol("QUIC opening marker"));}
-                    Ok(Channel{io:Box::new(QuicIo{send,recv}),host:self.host,exporter,kind:TransportKind::Quic,authenticated:false,_endpoint:Some(endpoint.clone()),_connection:Some(connection)})
+                tcp=self.tcp.accept()=>{let(stream,_)=tcp?;Ok(Box::pin(Self::accept_tcp(stream,self.tls.clone(),host)))},
+                quic=endpoint.accept()=>{
+                    let incoming=quic.ok_or(NetError::Protocol("QUIC listener closed"))?;
+                    let endpoint=endpoint.clone();Ok(Box::pin(async move{
+                        let connection=tokio::time::timeout(TIMEOUT,incoming).await.map_err(|_|NetError::Timeout)?.map_err(|_|NetError::Protocol("QUIC handshake failed"))?;
+                        let mut exporter=[0;32];connection.export_keying_material(&mut exporter,EXPORTER_LABEL,EXPORTER_CONTEXT).map_err(|_|NetError::Protocol("QUIC exporter failed"))?;
+                        let(send,mut recv)=tokio::time::timeout(TIMEOUT,connection.accept_bi()).await.map_err(|_|NetError::Timeout)?.map_err(|_|NetError::Protocol("QUIC stream failed"))?;
+                        let mut marker=[0;3];tokio::time::timeout(TIMEOUT,recv.read_exact(&mut marker)).await.map_err(|_|NetError::Timeout)?.map_err(|_|NetError::Protocol("QUIC opening marker"))?;
+                        if &marker!=b"DH1"{return Err(NetError::Protocol("QUIC opening marker"))}
+                        Ok(Channel{io:Box::new(QuicIo{send,recv}),host,exporter,kind:TransportKind::Quic,authenticated:false,_endpoint:Some(endpoint),_connection:Some(connection)})
+                    }))
                 }
             }
         } else {
             let (stream, _) = self.tcp.accept().await?;
-            self.accept_tcp(stream).await
+            Ok(Box::pin(Self::accept_tcp(stream, self.tls.clone(), host)))
         }
     }
-    async fn accept_tcp(&self, stream: TcpStream) -> Result<Channel, NetError> {
+    async fn accept_tcp(
+        stream: TcpStream,
+        tls: Arc<rustls::ServerConfig>,
+        host: [u8; 32],
+    ) -> Result<Channel, NetError> {
         stream.set_nodelay(true)?;
-        let stream = tokio::time::timeout(
-            TIMEOUT,
-            tokio_rustls::TlsAcceptor::from(self.tls.clone()).accept(stream),
-        )
-        .await
-        .map_err(|_| NetError::Timeout)??;
+        let stream =
+            tokio::time::timeout(TIMEOUT, tokio_rustls::TlsAcceptor::from(tls).accept(stream))
+                .await
+                .map_err(|_| NetError::Timeout)??;
         let exporter = stream.get_ref().1.export_keying_material(
             [0; 32],
             EXPORTER_LABEL,
@@ -85,7 +99,7 @@ impl Listener {
         )?;
         Ok(Channel {
             io: Box::new(stream),
-            host: self.host,
+            host,
             exporter,
             kind: TransportKind::Tcp,
             authenticated: false,
