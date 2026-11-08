@@ -53,3 +53,11 @@ The user's virtual-sign-in follow-up is accepted: investigate and prepare an iso
 After the task-owned Android emulator shut down, observed free memory recovered to about5GiB, still below the8GiB lab margin. The final read-only VM script tests pass. No VM was created, booted or signed in. Its manual Hyper-V Manager procedure and actual blockers are in windows-proof.md/windows-vm-preflight.json.
 
 Milestones1–5 are **pending** under the user's explicit P0 ordering. No Flutter viewer, password authentication, transport, installed production host, clipboard/files, performance claim or release installer is reported complete.
+
+## Final expectation audit — 8 November 2026
+
+The user requested a complete expectation audit and cleanup. Rechecked the full approved plan, source tree, all available test/build commands, current Windows/VM inspection and delivered archives. Fresh checks passed: Windows20, Linux15, three nativeC test programs, three Python tests, read-only PowerShell VM cases, strictRustClippy/format and the Android offline build (up-to-date11test reports, zero failures). No new emulator or installed privileged-host test was represented as run.
+
+Independent review confirmed the diagnostic-only scope and found no new Critical/Important implementation defect within that scope. It identified unresolved exported Android evidence paths; reproduced the failure and corrected only the bundle summary with explicit source-to-bundle provenance. The original source evidence stays unchanged. Revalidated artifacts and refreshed source/bundle archives, manifests and checksums. See final-audit.md and final-audit.json for the full mismatch between the planned product and delivered prototype.
+
+Finalization applies to the audit and P0 handoff. Product readiness remains false and the platform gate remains0/24. Missing Linux composition/broker and other native code are implementation gaps, in addition to unavailable lab proofs. The exact proposed Flutter/Rust production file structure is not yet implemented.

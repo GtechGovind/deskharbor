@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-11-08",
+  "timezone": "Asia/Calcutta",
+  "reviewed_source_revision": "42bbfa11801f4f5357d767d720e2b78194a03a86",
+  "audit_finalized": true,
+  "product_ready": false,
+  "release_ready": false,
+  "milestones": [
+    {
+      "id": 0,
+      "status": "partial_unqualified"
+    },
+    {
+      "id": 1,
+      "status": "not_implemented"
+    },
+    {
+      "id": 2,
+      "status": "not_implemented_production_host"
+    },
+    {
+      "id": 3,
+      "status": "not_implemented_streaming_and_controllers"
+    },
+    {
+      "id": 4,
+      "status": "not_implemented"
+    },
+    {
+      "id": 5,
+      "status": "not_implemented_or_qualified"
+    }
+  ],
+  "platform_gate": {
+    "ready": false,
+    "passed": 0,
+    "required": 24,
+    "observed_exit": 2
+  },
+  "verification": {
+    "windows_tests": 20,
+    "linux_tests": 15,
+    "native_c_programs": 3,
+    "python_tests": 3,
+    "android_xml_tests": 11,
+    "android_failures": 0,
+    "android_errors": 0,
+    "android_build": "passed_up_to_date",
+    "android_runtime_during_this_audit": "not_run",
+    "rust_clippy": "passed",
+    "rustfmt": "passed",
+    "vm_read_only_tests": "passed",
+    "vm_signin": "not_run",
+    "macos_native_build": "not_run",
+    "apk_sha256": "95cf4652726754dfe8ee89a3232c82f9bc62927ea1bd9c56a3bba6ba2a977a13"
+  },
+  "independent_review": {
+    "diagnostic_scope": "no_new_confirmed_critical_or_important_code_defect",
+    "product_acceptance": "not_met",
+    "packaging_issue": "bundle_android_evidence_paths_corrected"
+  },
+  "structural_checks": [
+    {
+      "path": "apps/client/pubspec.yaml",
+      "exists": false
+    },
+    {
+      "path": "packages/engine_bridge/pubspec.yaml",
+      "exists": false
+    },
+    {
+      "path": "packages/native_surfaces/pubspec.yaml",
+      "exists": false
+    },
+    {
+      "path": "proto/deskharbor.proto",
+      "exists": false
+    },
+    {
+      "path": "crates/dh-protocol/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "crates/dh-core/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "crates/dh-auth/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "crates/dh-net/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "crates/dh-media/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "crates/dh-ipc/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "crates/dh-clipboard/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "crates/dh-transfer/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "crates/dh-storage/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "crates/dh-ffi/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "bins/dh-hostd/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "bins/dh-netd/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "bins/dh-agent/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "bins/dh-capture-helper/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "bins/dh-cli/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "xtask/Cargo.toml",
+      "exists": false
+    },
+    {
+      "path": "packaging/windows/Package.wxs",
+      "exists": false
+    },
+    {
+      "path": "packaging/macos/Distribution.xml",
+      "exists": false
+    },
+    {
+      "path": "packaging/linux/control",
+      "exists": false
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "exists": false
+    }
+  ],
+  "missing_key_paths": 24,
+  "qualification": "Structural presence checks do not establish feature correctness. Passing diagnostic tests does not qualify the planned application. Audit completion is not product completion."
+}

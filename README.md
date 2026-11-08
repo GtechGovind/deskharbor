@@ -10,6 +10,8 @@ See [the approved design](docs/product-design.md), [implementation ledger](docs/
 
 Build/run steps: [installation](docs/installation.md). Actual gate: [0 of24 qualified](docs/proof-gate.json). Evidence requirements: [proof records](docs/proof-records.md). Outstanding product work: [acceptance status](docs/acceptance-tests.md).
 
+The [final expectation audit](docs/final-audit.md) compares all six approved milestones with the actual implementation and records the checks, remaining work and corrected package evidence paths. **The audit is complete; the application is not complete.**
+
 Available implementations are a Windows native inspection/capture and isolated-service proof harness, a restricted Linux DRM/uinput diagnostic, an Android attended MediaProjection proof APK, an uncompiled macOS Swift harness, and the shared evidence CLI. These do not yet provide a remote-control connection.
 
 No host service is silently installed, no Windows session is signed out, and no remote port is opened by the default inspection command. Captures are local diagnostic artifacts, not screenshots sent to a server.
