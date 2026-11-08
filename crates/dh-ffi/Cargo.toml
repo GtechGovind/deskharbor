@@ -1,0 +1,19 @@
+[package]
+name = "dh-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+dh-core = { path = "../dh-core", features = ["vp8"] }
+dh-media = { path = "../dh-media", features = ["vp8"] }
+flutter_rust_bridge = "=2.13.0"
+tokio.workspace = true
+zeroize.workspace = true
+
+[lints]
+workspace = true

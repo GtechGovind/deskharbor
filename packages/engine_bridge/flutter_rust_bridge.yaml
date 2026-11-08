@@ -1,0 +1,9 @@
+rust_input: crate::api,crate::streams
+rust_root: ../../crates/dh-ffi
+dart_output: lib/src/rust
+rust_output: ../../crates/dh-ffi/src/frb_generated.rs
+web: false
+deps_check: false
+auto_upgrade_dependency: false
+dart_fix: false
+type_64bit_int: true
