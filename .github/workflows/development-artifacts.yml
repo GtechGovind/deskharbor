@@ -1,0 +1,252 @@
+name: Build attested development applications
+on:
+  push:
+    branches: [feat/application-foundation]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: development-build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  packaging-guards:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Validate package boundaries including Unix symlinks
+        run: python3 scripts/test_package_development.py
+  verify:
+    uses: ./.github/workflows/ci.yml
+  bridge:
+    uses: ./.github/workflows/bridge-codegen.yml
+  desktop:
+    needs: [verify, bridge, packaging-guards]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            platform: windows-x64
+          - os: ubuntu-24.04
+            platform: linux-x64
+          - os: macos-15
+            platform: macos-arm64
+          - os: macos-15-intel
+            platform: macos-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.99.1 --profile minimal
+      - name: Install Linux desktop prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libegl1-mesa-dev libgles2-mesa-dev nasm
+      - name: Windows native build tools
+        if: runner.os == 'Windows'
+        id: msys
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: git make perl diffutils mingw-w64-x86_64-nasm
+      - name: Generate Windows VP8 project
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: bash scripts/build-libvpx.sh windows-project "$(cygpath -u "$GITHUB_WORKSPACE")/target/native-deps/libvpx"
+      - name: Build Windows VP8 archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          MSYS_ROOT: ${{ steps.msys.outputs.msys2-location }}
+        run: ./scripts/build-libvpx.ps1 -Root "$env:GITHUB_WORKSPACE/target/native-deps/libvpx" -NasmDirectory (Join-Path $env:MSYS_ROOT 'mingw64/bin')
+      - name: Build Unix VP8 archive
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mode=linux
+          if [ "$RUNNER_OS" = macOS ]; then
+            command -v nasm || brew install nasm
+            mode=macos
+          fi
+          bash scripts/build-libvpx.sh "$mode" "$GITHUB_WORKSPACE/target/native-deps/libvpx"
+          echo "VPX_INCLUDE_DIR=$GITHUB_WORKSPACE/target/native-deps/libvpx/source" >> "$GITHUB_ENV"
+          echo "VPX_LIB_DIR=$GITHUB_WORKSPACE/target/native-deps/libvpx/build" >> "$GITHUB_ENV"
+          echo 'VPX_LIB_NAME=vpx' >> "$GITHUB_ENV"
+      - name: Build Windows engine and tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/cargo-msvc.ps1 build --locked --release -p dh-ffi -p dh-hostd -p dh-cli
+      - name: Build Unix engine and tools
+        if: runner.os != 'Windows'
+        run: cargo build --locked --release -p dh-ffi -p dh-hostd -p dh-cli
+      - name: Resolve locked Flutter dependencies
+        working-directory: apps/client
+        run: flutter pub get --enforce-lockfile
+      - name: Check real generated bridge against native engine
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Windows) library="$GITHUB_WORKSPACE/target/release/dh_ffi.dll";;
+            macOS) library="$GITHUB_WORKSPACE/target/release/libdh_ffi.dylib";;
+            Linux) library="$GITHUB_WORKSPACE/target/release/libdh_ffi.so";;
+          esac
+          cd packages/engine_bridge
+          dart run tool/bridge_smoke.dart "$library" "$RUNNER_TEMP/deskharbor-bridge-smoke"
+      - name: Build Windows desktop application
+        if: runner.os == 'Windows'
+        working-directory: apps/client
+        run: flutter build windows --release
+      - name: Build Linux desktop application
+        if: runner.os == 'Linux'
+        working-directory: apps/client
+        run: flutter build linux --release
+      - name: Build macOS desktop application
+        if: runner.os == 'macOS'
+        working-directory: apps/client
+        run: flutter build macos --release
+      - name: Embed helpers and ad-hoc sign Mac application
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          app=apps/client/build/macos/Build/Products/Release/deskharbor.app
+          cp target/release/dh-hostd target/release/dh-cli "$app/Contents/MacOS/"
+          # Sign nested code first, then seal the outer bundle. No Apple identity
+          # or notarization is claimed by this ad-hoc development signature.
+          while IFS= read -r -d '' binary; do
+            if file "$binary" | grep -q 'Mach-O'; then codesign --force --sign - "$binary"; fi
+          done < <(find "$app/Contents" -type f -print0)
+          find "$app/Contents/Frameworks" -type d -name '*.framework' -depth -exec codesign --force --sign - {} \;
+          codesign --force --sign - --entitlements apps/client/macos/Runner/Release.entitlements "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+      - name: Test packaging guards
+        run: python scripts/test_package_development.py
+      - name: Package desktop build
+        shell: bash
+        env:
+          BUILD_PLATFORM: ${{ matrix.platform }}
+        run: |
+          case "$BUILD_PLATFORM" in
+            windows-x64) bundle=apps/client/build/windows/x64/runner/Release;;
+            linux-x64) bundle=apps/client/build/linux/x64/release/bundle;;
+            macos-*) bundle=apps/client/build/macos/Build/Products/Release/deskharbor.app;;
+          esac
+          python scripts/package-development.py --platform "$BUILD_PLATFORM" --bundle "$bundle" --binaries target/release --native-source target/native-deps/libvpx/source --revision "$GITHUB_SHA" --output dist
+      - name: Attest packaged bytes
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: dist/*
+      - name: Upload development build
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: DeskHarbor-${{ matrix.platform }}-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
+  android:
+    needs: [verify, bridge, packaging-guards]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+      - name: Install pinned Android NDK and Rust target
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          rustup toolchain install 1.99.1 --profile minimal --target aarch64-linux-android
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+      - name: Build Android VP8 and Rust engine
+        shell: bash
+        run: |
+          bash scripts/build-libvpx.sh android "$GITHUB_WORKSPACE/target/native-deps/libvpx"
+          export VPX_INCLUDE_DIR="$GITHUB_WORKSPACE/target/native-deps/libvpx/source"
+          export VPX_LIB_DIR="$GITHUB_WORKSPACE/target/native-deps/libvpx/build"
+          export VPX_LIB_NAME=vpx
+          ndk_bin="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ndk_bin/aarch64-linux-android30-clang"
+          export CC_aarch64_linux_android="$ndk_bin/aarch64-linux-android30-clang"
+          export AR_aarch64_linux_android="$ndk_bin/llvm-ar"
+          cargo build --locked --release -p dh-ffi --target aarch64-linux-android
+          mkdir -p apps/client/android/app/src/main/jniLibs/arm64-v8a
+          cp target/aarch64-linux-android/release/libdh_ffi.so apps/client/android/app/src/main/jniLibs/arm64-v8a/
+      - name: Restore persistent signing key outside source
+        shell: python
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DESKHARBOR_KEYSTORE_BASE64 }}
+        run: |
+          import base64, os, pathlib
+          encoded=os.environ['KEYSTORE_BASE64']
+          if not encoded: raise SystemExit('Persistent signing secret missing; refusing debug-key fallback')
+          path=pathlib.Path(os.environ['RUNNER_TEMP'])/'deskharbor-release.jks'
+          path.write_bytes(base64.b64decode(encoded,validate=True))
+          path.chmod(0o600)
+          with open(os.environ['GITHUB_ENV'],'a') as env: env.write('DESKHARBOR_KEYSTORE_PATH='+str(path)+'\n')
+      - name: Build persistently signed ARM64 APK
+        working-directory: apps/client
+        env:
+          DESKHARBOR_KEYSTORE_PASSWORD: ${{ secrets.DESKHARBOR_KEYSTORE_PASSWORD }}
+          DESKHARBOR_KEY_ALIAS: ${{ secrets.DESKHARBOR_KEY_ALIAS }}
+          DESKHARBOR_KEY_PASSWORD: ${{ secrets.DESKHARBOR_KEY_PASSWORD }}
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter build apk --release --target-platform android-arm64
+      - name: Verify APK signer and package
+        shell: bash
+        run: |
+          apk=apps/client/build/app/outputs/flutter-apk/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/apk-signature.txt"
+          python - <<'PY'
+          import pathlib, re, os
+          text=(pathlib.Path(os.environ['RUNNER_TEMP'])/'apk-signature.txt').read_text()
+          actual=re.findall(r'^Signer #\d+ certificate SHA-256 digest: ([a-fA-F0-9]{64})$',text,re.M)
+          expected=pathlib.Path('packaging/android/signing-certificate.sha256').read_text().split()[0].lower()
+          assert len(actual)==1 and actual[0].lower()==expected, 'APK signer differs from committed public identity'
+          PY
+          python scripts/package-development.py --platform android-arm64 --bundle "$apk" --native-source target/native-deps/libvpx/source --revision "$GITHUB_SHA" --output dist
+          cp "$apk" "dist/DeskHarbor-android-arm64-dev-${GITHUB_SHA:0:12}.apk"
+          (cd dist && sha256sum *.apk > APK-SHA256SUMS)
+      - name: Remove temporary private signing key
+        if: always()
+        shell: python
+        run: |
+          import os, pathlib
+          path=pathlib.Path(os.environ['RUNNER_TEMP'])/'deskharbor-release.jks'
+          path.unlink(missing_ok=True)
+      - name: Attest packaged bytes
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: dist/*
+      - name: Upload development build
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: DeskHarbor-android-arm64-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error

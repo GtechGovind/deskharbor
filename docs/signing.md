@@ -34,6 +34,15 @@ archives use the same independently verifiable build provenance/checksums.
 Production MSI/PKG/DEB/APK publication additionally requires the approved product
 and native qualification gates. Build provenance does not waive them.
 
+The `Build attested development applications` workflow builds archives on Windows,
+Ubuntu, Intel macOS and Apple Silicon macOS runners, and a persistently signed
+ARM64 Android APK on Ubuntu. Source and Flutter checks gate packaging. Artifacts
+are retained on the workflow run rather than published as a qualified release.
+Each archive includes its source revision, development qualification status,
+dependency lockfiles and license information. Successful workflow execution and
+attestation verification must be recorded before describing any artifact as built
+or attested. Portable archives do not install desktop services.
+
 ## Android package identity
 
 A persistent RSA4096/SHA256 Android signing key has been generated outside the

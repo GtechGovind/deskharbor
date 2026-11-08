@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: bridge-${{ github.ref }}
+  group: bridge-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   bridge:
@@ -61,6 +61,12 @@ jobs:
       - name: Analyze and test Flutter
         working-directory: apps/client
         run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Analyze and test native surface contract
+        working-directory: packages/native_surfaces
+        run: |
+          flutter pub get
           flutter analyze --no-pub
           flutter test --no-pub
       - name: Preserve generated bridge for local review

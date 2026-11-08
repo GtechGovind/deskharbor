@@ -27,9 +27,17 @@ fn main() {
     println!("cargo:rustc-link-lib=static={name}");
     let filename = if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         format!("{name}.lib")
-    } else { format!("lib{name}.a") };
-    println!("cargo:rerun-if-changed={}",std::path::Path::new(&library).join(filename).display());
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+    } else {
+        format!("lib{name}.a")
+    };
+    println!(
+        "cargo:rerun-if-changed={}",
+        std::path::Path::new(&library).join(filename).display()
+    );
+    if matches!(
+        std::env::var("CARGO_CFG_TARGET_OS").as_deref(),
+        Ok("linux" | "android")
+    ) {
         println!("cargo:rustc-link-lib=m");
     }
 }

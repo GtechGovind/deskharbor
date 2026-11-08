@@ -120,3 +120,15 @@ Read `docs/engine-contract.md` native-surface section first. Own native_surfaces
 - [ ] Implement shared C ABI and Windows/Linux/macOS/Android native texture plugins with explicit ownership, RGBA orientation, lifecycle cleanup and dynamic loading of the same Rust engine library.
 - [ ] Verify native build integration where available, static/compile checks otherwise; report runtime gaps without claiming actual display proofs.
 - [ ] Self-review and commit only owned files, write report, return for independent task review.
+
+## Task 10: Ordinary Windows desktop input
+
+Own new `dh-platform/src/runtime/input.rs`, `windows_input.rs`, their mapping/state tests, minimal runtime/mod.rs readiness/exports and the frozen input/release glue in `dh-core/src/engine/host_session.rs`. Do not alter existing proof-helper security, authentication, storage, transports, UI, root Cargo or unrelated core state. Task7 implementer identified/froze this glue; communicate through controller for overlap.
+
+Interfaces: platform-owned `NativeInput` enum `Key{usage:u16,pressed:bool}`, `Pointer{x:f64,y:f64,buttons:u32,wheel_x:i32,wheel_y:i32}`, `Text(String)`, `ReleaseAll`; `runtime::inject_input(expected_user:&str,display:&report::Display,event:NativeInput)->Result<(),ProbeError>` and `runtime::release_input(expected_user:&str)->Result<(),ProbeError>`. No platform->core dependency. Non-Windows adapters return explicit unavailable. Windows may inject only in the verified same active console SID/WinSta0/Default desktop, with non-elevated owner token; no secure attention or sign-in claim.
+
+- [ ] Write failing pure packet/mapping/state tests for physical HID scan codes (US/German ISO, modifiers, extended/navigation/keypad), Unicode surrogate pairs, held-key/button cleanup and partial failure. Never call actual SendInput in tests.
+- [ ] Write failing coordinate fixtures for negative origins, mixed-monitor bounds, DPI/physical coordinate consistency, normalized corners/NaN, wheel direction and invalid buttons. Assert independently derived packet values.
+- [ ] Implement Windows SendInput adapter with per-thread physical DPI guard, native principal/desktop recheck, bounded text/events and exact success accounting. Release only remotely held state, never inject cleanup into another principal/desktop. Verify unusual scan codes against primary Microsoft/USB documentation.
+- [ ] Wire broker-authorized native dispatch after semantic/epoch/layout/display validation; record held input only after successful native delivery. Consume ReleasedInput exactly once on host refresh/revoke, monitor change, disconnect/drop and ReleaseAll; preserve synthetic-test behavior without system injection.
+- [ ] Run focused one-job Rust tests/Clippy and owned-source self-review; document ordinary-desktop scope, keep installed/secure-desktop P0 pending. Commit owned paths only after controller grants index slot, then independent task review.

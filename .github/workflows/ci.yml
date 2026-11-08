@@ -33,7 +33,7 @@ jobs:
         with:
           msystem: MINGW64
           update: false
-          install: git make perl mingw-w64-x86_64-nasm
+          install: git make perl diffutils mingw-w64-x86_64-nasm
       - name: Generate pinned Windows VP8 project
         if: runner.os == 'Windows'
         shell: msys2 {0}
