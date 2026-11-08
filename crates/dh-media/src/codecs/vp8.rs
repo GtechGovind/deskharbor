@@ -172,11 +172,7 @@ impl Decoder {
         // SAFETY: Successful bridge call initializes every YuvFrame field.
         let frame = unsafe { yuv.assume_init() };
         let result = copy_yuv(&frame);
-        if result.is_err() {
-            self.needs_keyframe = true;
-        } else {
-            self.needs_keyframe = false;
-        }
+        self.needs_keyframe = result.is_err();
         result
     }
 }

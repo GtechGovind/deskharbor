@@ -34,6 +34,25 @@ archives use the same independently verifiable build provenance/checksums.
 Production MSI/PKG/DEB/APK publication additionally requires the approved product
 and native qualification gates. Build provenance does not waive them.
 
+## Android package identity
+
+A persistent RSA4096/SHA256 Android signing key has been generated outside the
+repository. The private keystore is protected by a random password and an
+owner-restricted Windows directory; its local credentials are encrypted with
+current-user DPAPI. The workflow receives the keystore/password only through
+GitHub Actions secrets. Neither private material nor passwords belong in source.
+
+The public X.509 certificate's SHA256 fingerprint is:
+
+```text
+d885be68117d4cc6eb64376cbf12b65bda8233b7ccb783fb15eecdd59634e9fd
+```
+
+An Android release build must use this persistent key, then verify the APK with
+`apksigner verify --verbose --print-certs` and compare its signer fingerprint.
+Debug APKs use a separate debug key. GitHub provenance is verified independently.
+This Android certificate does not provide Apple or Windows publisher trust.
+
 References: [GitHub attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations),
 [Apple Developer ID](https://developer.apple.com/developer-id/),
 [Apple notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
