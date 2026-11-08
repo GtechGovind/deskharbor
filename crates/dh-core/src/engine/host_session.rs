@@ -431,7 +431,7 @@ async fn media(
         };
         let pixels = if host.backend == HostBackend::Synthetic {
             let mut pixels = vec![0u8; (w * h * 4) as usize];
-            for (x, p) in pixels.chunks_exact_mut(4).enumerate() {
+            for (x, p) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
                 p.copy_from_slice(&[((x % w as usize) * 3) as u8, 128, sequence as u8, 255]);
             }
             pixels
