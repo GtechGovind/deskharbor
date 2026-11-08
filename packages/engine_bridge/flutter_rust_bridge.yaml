@@ -1,7 +1,8 @@
 rust_input: crate::api,crate::streams
 rust_root: ../../crates/dh-ffi
 dart_output: lib/src/rust
-rust_output: ../../crates/dh-ffi/src/frb_generated.rs
+# Let FRB derive rust_output from its canonical rust_root. An explicit path
+# containing '..' fails FRB2.13's compute_mod_from_rust_path prefix check.
 web: false
 deps_check: false
 auto_upgrade_dependency: false
