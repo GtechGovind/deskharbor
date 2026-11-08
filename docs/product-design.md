@@ -35,4 +35,4 @@ Final qualification additionally needs 50 login cycles, eight-hour soak, offline
 
 ## Current implementation scope
 
-Only P0 and the tests/tools needed to evaluate it are currently authorized to advance under the milestone ordering. Future product files are not populated with fake implementations or success returns. Missing physical tests are `not_run`, never `passed`.
+The user's continuation instruction authorizes implementing all locally possible product features while Hyper-V is being prepared. Product development may therefore proceed alongside P0. Missing physical tests remain `not_run`, never `passed`, and still block production certification. Mac hardware tests and Developer ID signing remain pending. GitHub-hosted builds and freely verifiable artifact signatures are authorized; they do not replace OS publisher trust or native sign-in qualification.
