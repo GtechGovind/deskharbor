@@ -67,7 +67,7 @@ fn field(session: u32, kind: WTS_INFO_CLASS) -> Option<String> {
         if WTSQuerySessionInformationW(null_mut(), session, kind, &mut ptr, &mut bytes) == 0 {
             return None;
         }
-        let value = if !ptr.is_null() && bytes >= 2 && bytes <= 2048 && bytes.is_multiple_of(2) {
+        let value = if !ptr.is_null() && (2..=2048).contains(&bytes) && bytes.is_multiple_of(2) {
             let slice = std::slice::from_raw_parts(ptr, bytes as usize / 2);
             slice
                 .iter()

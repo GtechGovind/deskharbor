@@ -33,7 +33,7 @@ fn secure(root: &Path) -> io::Result<()> {
         ptr::null_mut,
     };
     use windows_sys::Win32::{
-        Foundation::{ERROR_ALREADY_EXISTS, GetLastError, LocalFree},
+        Foundation::{ERROR_ALREADY_EXISTS, LocalFree},
         Security::{Authorization::*, *},
         Storage::FileSystem::{CreateDirectoryW, FILE_ATTRIBUTE_REPARSE_POINT},
     };
@@ -74,10 +74,11 @@ fn secure(root: &Path) -> io::Result<()> {
         bInheritHandle: 0,
     };
     // SAFETY: Both the path and security descriptor remain valid through CreateDirectoryW.
-    if unsafe { CreateDirectoryW(name.as_ptr(), &attr) } == 0
-        && unsafe { GetLastError() } != ERROR_ALREADY_EXISTS
-    {
-        return Err(io::Error::last_os_error());
+    if unsafe { CreateDirectoryW(name.as_ptr(), &attr) } == 0 {
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() != Some(ERROR_ALREADY_EXISTS as i32) {
+            return Err(error);
+        }
     }
     let metadata = fs::symlink_metadata(root)?;
     if !metadata.is_dir() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
