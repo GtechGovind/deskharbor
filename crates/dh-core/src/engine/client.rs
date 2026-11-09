@@ -41,6 +41,7 @@ pub(super) fn check_reply(body: Body) -> EngineResult<Body> {
             "collision" => ("collision", "A file already exists at the destination"),
             "busy" => ("busy", "Another operation is active"),
             "no_display" => ("no_display", "Monitor no longer available"),
+            "codec" => ("codec", "Host media codec is unavailable"),
             "disconnected" => ("disconnected", "Session was revoked"),
             _ => ("invalid_request", "Peer rejected the request"),
         };
@@ -57,10 +58,11 @@ fn session_state(status: &HostStatus) -> EngineResult<&'static str> {
         _ => Err(invalid()),
     }
 }
-fn update(info: &mut SessionInfo, h: HostStatus) -> EngineResult<bool> {
+fn update(info: &mut SessionInfo, h: HostStatus) -> EngineResult<()> {
     let state = session_state(&h)?;
     if h.epoch == 0
         || h.layout == 0
+        || (state == "connected" && h.displays.is_empty())
         || h.displays.len() > 64
         || h.displays.iter().any(|d| {
             d.id.is_empty()
@@ -70,26 +72,26 @@ fn update(info: &mut SessionInfo, h: HostStatus) -> EngineResult<bool> {
                 || d.width > 16384
                 || d.height > 16384
         })
+        || h.displays
+            .iter()
+            .enumerate()
+            .any(|(index, d)| h.displays[..index].iter().any(|other| other.id == d.id))
     {
         return Err(invalid());
     }
-    let displays: Vec<_> = h.displays.into_iter().map(Into::into).collect();
-    let changed = info.state != state
-        || info.epoch != h.epoch
-        || info.layout != h.layout
-        || info.displays != displays;
+    let displays: Vec<DisplayInfo> = h.displays.into_iter().map(Into::into).collect();
+    let selected = match (h.selected_display.as_str(), displays.as_slice()) {
+        ("", []) => String::new(),
+        ("", [only]) => only.id.clone(), // Unambiguous older single-monitor peer.
+        (id, _) if !id.is_empty() && displays.iter().any(|d| d.id == id) => id.into(),
+        _ => return Err(invalid()),
+    };
     info.state = state.into();
     info.epoch = h.epoch;
     info.layout = h.layout;
     info.displays = displays;
-    if !info.displays.iter().any(|d| d.id == info.selected_display) {
-        info.selected_display = info
-            .displays
-            .first()
-            .map(|d| d.id.clone())
-            .unwrap_or_default();
-    }
-    Ok(changed)
+    info.selected_display = selected;
+    Ok(())
 }
 impl DeskEngine {
     pub async fn connect(
@@ -175,7 +177,7 @@ impl DeskEngine {
         let s = Arc::new(ClientSession {
             tx,
             info: Mutex::new(info.clone()),
-            frame: Mutex::default(),
+            presentation: Mutex::default(),
             address,
             pin,
             quic,
@@ -196,7 +198,7 @@ impl DeskEngine {
         let s = self.session(id)?;
         s.rpc(cmd("disconnect", "", 0)).await?;
         self.0.sessions.lock().unwrap().remove(&id);
-        *s.frame.lock().unwrap() = None;
+        s.presentation.lock().unwrap().frame = None;
         Ok(())
     }
     pub async fn select_monitor(&self, id: u32, display_id: String) -> EngineResult<()> {
@@ -205,14 +207,12 @@ impl DeskEngine {
         let Body::HostStatus(h) = s.rpc(cmd("display", &display_id, epoch)).await? else {
             return Err(invalid());
         };
-        let mut info = s.info.lock().unwrap();
-        update(&mut info, h)?;
-        info.selected_display = display_id;
-        *s.frame.lock().unwrap() = None;
-        let _ = self
-            .0
-            .events
-            .send(EngineEvent::SessionChanged(info.clone()));
+        let legacy_single = h.selected_display.is_empty()
+            && h.displays.len() == 1
+            && h.displays[0].id == display_id;
+        if h.selected_display != display_id && !legacy_single {
+            return Err(invalid());
+        }
         Ok(())
     }
     pub async fn send_input(&self, id: u32, i: InputRequest) -> EngineResult<()> {
@@ -280,6 +280,34 @@ impl DeskEngine {
     }
 }
 type Requests = mpsc::Receiver<(Body, oneshot::Sender<EngineResult<Body>>)>;
+fn same_generation(a: &SessionInfo, b: &SessionInfo) -> bool {
+    (a.epoch, a.layout, &a.selected_display) == (b.epoch, b.layout, &b.selected_display)
+}
+fn apply_status(
+    engine: &Weak<Inner>,
+    session: &ClientSession,
+    status: HostStatus,
+) -> EngineResult<()> {
+    let mut info = session.info.lock().unwrap();
+    let previous = info.clone();
+    update(&mut info, status)?;
+    let mut surface = session.presentation.lock().unwrap();
+    if info.state != "connected" {
+        surface.retry = false;
+    } else if surface.retry {
+        info.state = "no_display".into();
+    }
+    if previous.state != info.state
+        || !same_generation(&previous, &info)
+        || previous.displays != info.displays
+    {
+        surface.frame = None;
+        if let Some(e) = engine.upgrade() {
+            let _ = e.events.send(EngineEvent::SessionChanged(info.clone()));
+        }
+    }
+    Ok(())
+}
 async fn exchange(ch: &mut Channel, id: u64, body: Body) -> EngineResult<Body> {
     ch.send(msg(id, body)).await?;
     let e = ch.receive().await?;
@@ -306,20 +334,17 @@ async fn control_actor(
         let closing = matches!(&body,Body::Command(c) if c.name=="disconnect");
         let reply = exchange(&mut ch, sequence, body).await;
         sequence += 1;
+        if let Ok(Body::HostStatus(h)) = &reply
+            && let Err(error) = apply_status(&engine, &s, h.clone())
+        {
+            if let Some(tx) = tx {
+                let _ = tx.send(Err(error));
+            }
+            break;
+        }
         let broken = reply
             .as_ref()
             .is_err_and(|e| matches!(e.code.as_str(), "disconnected" | "timeout"));
-        if tx.is_none()
-            && let Ok(Body::HostStatus(h)) = &reply
-        {
-            let mut info = s.info.lock().unwrap();
-            if update(&mut info, h.clone()).unwrap_or(true) {
-                *s.frame.lock().unwrap() = None;
-                if let Some(e) = engine.upgrade() {
-                    let _ = e.events.send(EngineEvent::SessionChanged(info.clone()));
-                }
-            }
-        }
         if let Some(tx) = tx {
             let _ = tx.send(reply);
         }
@@ -329,7 +354,7 @@ async fn control_actor(
     }
     let mut info = s.info.lock().unwrap();
     info.state = "disconnected".into();
-    *s.frame.lock().unwrap() = None;
+    s.presentation.lock().unwrap().frame = None;
     if let Some(e) = engine.upgrade() {
         e.sessions.lock().unwrap().remove(&info.id);
         let _ = e.events.send(EngineEvent::SessionChanged(info.clone()));
@@ -354,16 +379,28 @@ async fn media_loop(engine: Weak<Inner>, s: Arc<ClientSession>) {
         if info.state == "disconnected" || engine.strong_count() == 0 {
             return;
         }
-        if info.state == "connected" {
+        if info.state == "connected"
+            || (info.state == "no_display" && s.presentation.lock().unwrap().retry)
+        {
             let result = stream(&engine, &s, &info).await;
             if let Err(e) = result
                 && let Some(engine) = engine.upgrade()
             {
-                let _ = engine.events.send(EngineEvent::Error {
-                    session_id: Some(info.id),
-                    code: e.code,
-                    message: e.message,
-                });
+                let mut current = s.info.lock().unwrap();
+                let mut surface = s.presentation.lock().unwrap();
+                if same_generation(&current, &info) && current.state == "connected" {
+                    surface.frame = None;
+                    surface.retry = true;
+                    current.state = "no_display".into();
+                    let _ = engine
+                        .events
+                        .send(EngineEvent::SessionChanged(current.clone()));
+                    let _ = engine.events.send(EngineEvent::Error {
+                        session_id: Some(info.id),
+                        code: e.code,
+                        message: e.message,
+                    });
+                }
             }
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -396,21 +433,28 @@ async fn stream(engine: &Weak<Inner>, s: &ClientSession, start: &SessionInfo) ->
         }
         sequence = v.sequence;
         {
-            let info = s.info.lock().unwrap();
-            if info.state != "connected"
+            let mut info = s.info.lock().unwrap();
+            let mut surface = s.presentation.lock().unwrap();
+            if !(info.state == "connected" || (info.state == "no_display" && surface.retry))
                 || info.layout != v.layout
                 || info.epoch != v.epoch
                 || info.selected_display != v.display_id
             {
                 return Ok(());
             }
-            *s.frame.lock().unwrap() = Some(Arc::new(frame));
+            surface.sequence = surface.sequence.checked_add(1).ok_or_else(invalid)?;
+            surface.frame = Some(Arc::new(frame));
             let Some(e) = engine.upgrade() else {
                 return Ok(());
             };
+            if surface.retry {
+                surface.retry = false;
+                info.state = "connected".into();
+                let _ = e.events.send(EngineEvent::SessionChanged(info.clone()));
+            }
             let _ = e.events.send(EngineEvent::FrameReady {
                 session_id: info.id,
-                sequence,
+                sequence: surface.sequence,
                 width: v.width,
                 height: v.height,
             });

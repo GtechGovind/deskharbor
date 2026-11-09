@@ -3,7 +3,6 @@ use super::{
     store::Snapshot,
     *,
 };
-use std::fs::File;
 use tokio::{
     sync::oneshot,
     task::{JoinHandle, JoinSet},
@@ -34,10 +33,7 @@ impl Drop for Daemon {
 }
 impl DeskEngine {
     pub async fn start_daemon(&self, backend: HostBackend) -> EngineResult<Daemon> {
-        let lock = self.0.cfg.lock_file("daemon.lock")?;
-        lock.try_lock()
-            .map_err(|_| err("host_busy", "Another daemon owns this data directory"))?;
-        self.0.cfg.clear_status()?;
+        let lock = self.0.cfg.acquire_daemon()?;
         let (tx, rx) = oneshot::channel();
         let (ready, started) = oneshot::channel();
         let engine = self.clone();
@@ -54,7 +50,7 @@ impl DeskEngine {
 async fn run(
     engine: DeskEngine,
     backend: HostBackend,
-    _owner: File,
+    owner: store::DaemonLease,
     mut stop: oneshot::Receiver<()>,
     ready: oneshot::Sender<EngineResult<()>>,
 ) -> EngineResult<()> {
@@ -77,7 +73,7 @@ async fn run(
             }
         };
         let revision = snapshot.revision;
-        engine.0.cfg.publish(revision, &info)?;
+        owner.publish(revision, &info)?;
         status_event(&engine, info.clone());
         if let Some(ready) = ready.take() {
             let _ = ready.send(Ok(()));
@@ -90,7 +86,7 @@ async fn run(
                 _=&mut stop=>break true,
                 _=tick.tick()=>{
                     if engine.0.cfg.snapshot()?.revision!=revision{break false}
-                    if let Some(h)=&host{let s=h.status();if info.state!=s.state||info.detail!=s.detail{info.state=s.state;info.detail=s.detail;engine.0.cfg.publish(revision,&info)?; status_event(&engine,info.clone());}}
+                    if let Some(h)=&host{let s=h.status();if info.state!=s.state||info.detail!=s.detail{info.state=s.state;info.detail=s.detail;owner.publish(revision,&info)?; status_event(&engine,info.clone());}}
                 },
                 result=async{listener.as_ref().expect("enabled listener").incoming().await},if listener.is_some()&&peers.len()<16=>{
                     if let (Ok(handshake),Some(host))=(result,host.as_ref()){let host=host.clone(); peers.spawn(async move{if let Ok(ch)=handshake.await {let _=serve(host,ch).await;}});}
@@ -120,6 +116,12 @@ async fn activate(e: &DeskEngine, backend: HostBackend, s: &Snapshot) -> EngineR
     };
     if !s.settings.enabled {
         return Ok((None, None, info));
+    }
+    if backend == HostBackend::Native && !dh_platform::ordinary_host_allowed() {
+        return Err(err(
+            "permission_needed",
+            "Run the development host under an ordinary user account",
+        ));
     }
     let Some(blob) = &s.password else {
         info.detail = "Set a host password before enabling the listener".into();

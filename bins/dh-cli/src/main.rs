@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut a = std::env::args_os().skip(1);
     if a.next().as_deref() != Some(OsStr::new("--data-dir")) {
         return Err(
-            "usage: dh-cli --data-dir PATH status|password|enable ADDRESS|disable|connect ADDRESS"
+            "usage: dh-cli --data-dir PATH status|password|enable ADDRESS|disable|grant-directory PATH|connect ADDRESS"
                 .into(),
         );
     }
@@ -46,6 +46,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match (command.as_str(), argument) {
         ("status", None) => println!("{}", serde_json::to_string(&e.host_status().await?)?),
         ("password", None) => e.set_host_password(password()?).await?,
+        ("grant-directory", Some(path)) => {
+            e.grant_transfer_directory(path).await?;
+        }
         ("enable", Some(address)) => {
             e.configure_host(HostSettings {
                 enabled: true,

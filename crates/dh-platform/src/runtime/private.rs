@@ -5,29 +5,194 @@ use std::{
 
 /// Isolate all SQLite journals, keys and daemon control files under one private directory.
 pub fn private_directory(parent: &Path) -> io::Result<PathBuf> {
-    fs::create_dir_all(parent)?;
+    let parent = checked_parent(parent)?;
     let root = parent.join("deskharbor-private");
     secure(&root)?;
     Ok(root)
 }
+#[cfg(windows)]
+mod access;
+#[cfg(target_os = "macos")]
+mod darwin;
+fn denied() -> io::Error {
+    io::ErrorKind::PermissionDenied.into()
+}
+fn checked_parent(parent: &Path) -> io::Result<PathBuf> {
+    let absolute = std::path::absolute(parent)?;
+    if absolute
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err(denied());
+    }
+    let mut physical = PathBuf::new();
+    for part in absolute.ancestors().collect::<Vec<_>>().into_iter().rev() {
+        if let Some(name) = part.file_name() {
+            physical.push(name)
+        } else {
+            physical = part.into()
+        }
+        let m = match fs::symlink_metadata(&physical) {
+            Ok(m) => m,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                #[cfg(unix)]
+                let created = {
+                    use std::os::unix::fs::DirBuilderExt;
+                    fs::DirBuilder::new().mode(0o700).create(&physical)
+                };
+                #[cfg(windows)]
+                let created = fs::create_dir(&physical);
+                match created {
+                    Ok(()) => (),
+                    Err(e) if e.kind() == io::ErrorKind::AlreadyExists => (),
+                    Err(e) => return Err(e),
+                }
+                fs::symlink_metadata(&physical)?
+            }
+            Err(e) => return Err(e),
+        };
+        // macOS has root-owned redirects such as /var -> /private/var. Only follow one from
+        // an already verified parent, then verify every directory in the resolved chain.
+        #[cfg(unix)]
+        if m.is_symlink() {
+            use std::os::unix::fs::MetadataExt;
+            if m.uid() != 0 {
+                return Err(denied());
+            }
+            physical = fs::canonicalize(&physical)?;
+            for a in physical.ancestors() {
+                check_dir(a, &fs::symlink_metadata(a)?)?;
+            }
+            continue;
+        }
+        check_dir(&physical, &m)?;
+    }
+    Ok(physical)
+}
+#[cfg(unix)]
+fn check_dir(_path: &Path, m: &fs::Metadata) -> io::Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    // SAFETY: Query only the process's current effective UID.
+    let uid = unsafe { libc::geteuid() };
+    if !m.is_dir()
+        || (m.uid() != uid && m.uid() != 0)
+        || (m.mode() & 0o022 != 0 && m.mode() & 0o1000 == 0)
+    {
+        return Err(denied());
+    }
+    #[cfg(target_os = "macos")]
+    darwin::check(_path, m, true)?;
+    Ok(())
+}
+#[cfg(windows)]
+fn check_dir(path: &Path, m: &fs::Metadata) -> io::Result<()> {
+    if !m.is_dir() {
+        return Err(denied());
+    }
+    access::check(path, true)
+}
+impl crate::PrivateFiles {
+    pub fn open(parent: &Path) -> io::Result<Self> {
+        let root = private_directory(parent)?;
+        let files = Self { root };
+        for entry in fs::read_dir(&files.root)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            files.checked(name.to_str().ok_or_else(denied)?)?;
+        }
+        Ok(files)
+    }
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+    /// A long-lived daemon must stop using a storage path if a later ACL change makes it replaceable.
+    pub fn revalidate(&self) -> io::Result<()> {
+        for ancestor in self
+            .root
+            .ancestors()
+            .skip(1)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+        {
+            check_dir(ancestor, &fs::symlink_metadata(ancestor)?)?;
+        }
+        verify_private_root(&self.root)
+    }
+    pub fn checked(&self, name: &str) -> io::Result<PathBuf> {
+        if name.is_empty() || Path::new(name).file_name() != Some(std::ffi::OsStr::new(name)) {
+            return Err(denied());
+        }
+        let path = self.root.join(name);
+        let m = match fs::symlink_metadata(&path) {
+            Ok(m) => m,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(path),
+            Err(e) => return Err(e),
+        };
+        if !m.is_file() {
+            return Err(denied());
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            // SAFETY: The returned effective UID identifies the application owner.
+            let owner = unsafe { libc::geteuid() };
+            if m.uid() != owner
+                || m.nlink() != 1
+                || m.mode() & 0o022 != 0
+                || (name == "user.key" && (m.mode() & 0o077 != 0 || m.len() != 32))
+            {
+                return Err(denied());
+            }
+        }
+        #[cfg(target_os = "macos")]
+        match darwin::check(&path, &m, false) {
+            Ok(()) => (),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => (),
+            Err(error) => return Err(error),
+        }
+        #[cfg(windows)]
+        match access::check(&path, false) {
+            Ok(()) => (),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => (),
+            Err(e) => return Err(e),
+        }
+        Ok(path)
+    }
+}
 
 #[cfg(unix)]
 fn secure(root: &Path) -> io::Result<()> {
-    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+    use std::os::unix::fs::DirBuilderExt;
     match fs::DirBuilder::new().mode(0o700).create(root) {
         Ok(()) => (),
         Err(e) if e.kind() == io::ErrorKind::AlreadyExists => (),
         Err(e) => return Err(e),
     }
+    verify_private_root(root)
+}
+#[cfg(unix)]
+fn verify_private_root(root: &Path) -> io::Result<()> {
+    use std::os::unix::fs::MetadataExt;
     let m = fs::symlink_metadata(root)?;
     // SAFETY: geteuid queries the current process without arguments or side effects.
     if !m.is_dir() || m.mode() & 0o077 != 0 || m.uid() != unsafe { libc::geteuid() } {
         return Err(io::ErrorKind::PermissionDenied.into());
     }
+    #[cfg(target_os = "macos")]
+    darwin::check(root, &m, false)?;
     Ok(())
 }
 #[cfg(windows)]
 fn secure(root: &Path) -> io::Result<()> {
+    windows_root(root, true)
+}
+#[cfg(windows)]
+fn verify_private_root(root: &Path) -> io::Result<()> {
+    windows_root(root, false)
+}
+#[cfg(windows)]
+fn windows_root(root: &Path, create: bool) -> io::Result<()> {
     use std::{
         os::windows::{ffi::OsStrExt, fs::MetadataExt},
         ptr::null_mut,
@@ -74,7 +239,7 @@ fn secure(root: &Path) -> io::Result<()> {
         bInheritHandle: 0,
     };
     // SAFETY: Both the path and security descriptor remain valid through CreateDirectoryW.
-    if unsafe { CreateDirectoryW(name.as_ptr(), &attr) } == 0 {
+    if create && unsafe { CreateDirectoryW(name.as_ptr(), &attr) } == 0 {
         let error = io::Error::last_os_error();
         if error.raw_os_error() != Some(ERROR_ALREADY_EXISTS as i32) {
             return Err(error);

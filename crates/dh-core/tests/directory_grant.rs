@@ -27,6 +27,15 @@ async fn replacing_a_granted_directory_requires_an_explicit_new_grant() {
         !engine.host_status().await.unwrap().running,
         "replacement directory inherited the previous grant"
     );
-    assert!(engine.configure_host(settings).await.unwrap().running);
+    let mut unrelated = settings;
+    unrelated.clipboard = true;
+    assert!(!engine.configure_host(unrelated).await.unwrap().running);
+    assert!(
+        engine
+            .grant_transfer_directory(path.to_str().unwrap().into())
+            .await
+            .unwrap()
+            .running
+    );
     daemon.stop().await.unwrap();
 }

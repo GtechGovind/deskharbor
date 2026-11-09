@@ -208,12 +208,25 @@ async fn send(
     else {
         return Err(invalid());
     };
-    if r.state != "completed" || r.offset != t.total || r.id != id {
+    confirm_publication(&mut ch, r, &id, t.total, seq + 2, epoch).await
+}
+async fn confirm_publication(
+    ch: &mut Channel,
+    r: TransferState,
+    id: &[u8],
+    size: u64,
+    closing_seq: u64,
+    epoch: u64,
+) -> EngineResult<()> {
+    if r.state != "completed" || r.offset != size || r.id != id {
         return Err(invalid());
     }
-    ch.send(msg(seq + 2, cmd("close", "", epoch))).await?;
+    // The authenticated receipt is the commit boundary. A peer may exit immediately afterward.
+    let _ = ch.send(msg(closing_seq, cmd("close", "", epoch))).await;
     Ok(())
 }
+#[cfg(test)]
+mod review;
 struct Active(Arc<Host>);
 impl Drop for Active {
     fn drop(&mut self) {

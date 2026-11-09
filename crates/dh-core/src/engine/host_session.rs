@@ -12,6 +12,7 @@ pub(super) struct Host {
     pub settings: HostSettings,
     pub directory: Option<dh_transfer::GrantedDirectory>,
     credential: Arc<HostCredentials>,
+    source: Box<dyn DesktopSource>,
     pub data: Mutex<Data>,
 }
 pub(super) struct Data {
@@ -77,6 +78,30 @@ fn observed(backend: HostBackend) -> (HostState, Vec<Display>, String) {
         n.detail.into(),
     )
 }
+trait DesktopSource: Send + Sync {
+    fn observe(&self) -> (HostState, Vec<Display>, String);
+    fn capture(&self, id: &str, w: u32, h: u32, sequence: u64) -> EngineResult<Vec<u8>>;
+}
+impl DesktopSource for HostBackend {
+    fn observe(&self) -> (HostState, Vec<Display>, String) {
+        observed(*self)
+    }
+    fn capture(&self, id: &str, w: u32, h: u32, sequence: u64) -> EngineResult<Vec<u8>> {
+        if *self == HostBackend::Synthetic {
+            let mut pixels = vec![0u8; (w * h * 4) as usize];
+            for (x, p) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+                *p = [((x % w as usize) * 3) as u8, 128, sequence as u8, 255];
+            }
+            return Ok(pixels);
+        }
+        let frame = dh_platform::runtime::capture(id)
+            .map_err(|_| err("permission_needed", "Capture is unavailable"))?;
+        if frame.width != w || frame.height != h {
+            return Err(invalid());
+        }
+        Ok(frame.pixels_rgba)
+    }
+}
 fn label(s: &HostState) -> &'static str {
     match s {
         HostState::Ready { .. } => "ready",
@@ -114,6 +139,7 @@ impl Host {
             settings,
             directory,
             credential: Arc::new(credential),
+            source: Box::new(backend),
             data: Mutex::new(Data {
                 broker: Broker::with_epoch(state, revision),
                 selected: displays.first().map(|d| d.id.clone()).unwrap_or_default(),
@@ -129,7 +155,7 @@ impl Host {
     }
     pub fn refresh(&self) -> std::sync::MutexGuard<'_, Data> {
         let mut d = self.data.lock().unwrap();
-        let (s, displays, detail) = observed(self.backend);
+        let (s, displays, detail) = self.source.observe();
         if d.broker.state() != &s {
             d.broker.transition(s);
             d.synthetic_clip.clear();
@@ -139,7 +165,9 @@ impl Host {
         if d.displays != displays {
             d.broker.replace_layout();
             d.tickets.clear();
-            d.selected = displays.first().map(|d| d.id.clone()).unwrap_or_default();
+            if !displays.iter().any(|display| display.id == d.selected) {
+                d.selected = displays.first().map(|d| d.id.clone()).unwrap_or_default();
+            }
             d.displays = displays;
         }
         d.detail = detail;
@@ -179,6 +207,7 @@ impl Data {
             layout: self.broker.layout(),
             displays: self.displays.clone(),
             synthetic,
+            selected_display: self.selected.clone(),
         })
     }
 }
@@ -419,44 +448,30 @@ async fn media(
         if !matches!(req.body,Some(Body::Command(c)) if c.name=="frame") {
             return Err(invalid());
         }
-        let (id, w, h) = {
-            let d = host.refresh();
-            d.check(&b, Operation::View, epoch, layout)?;
-            let v = d
-                .displays
-                .iter()
-                .find(|v| v.id == d.selected)
-                .ok_or_else(invalid)?;
-            (v.id.clone(), v.width, v.height)
-        };
-        let pixels = if host.backend == HostBackend::Synthetic {
-            let mut pixels = vec![0u8; (w * h * 4) as usize];
-            for (x, p) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-                p.copy_from_slice(&[((x % w as usize) * 3) as u8, 128, sequence as u8, 255]);
+        let frame = (|| -> EngineResult<dh_protocol::VideoFrame> {
+            let (id, w, h) = {
+                let d = host.refresh();
+                d.check(&b, Operation::View, epoch, layout)?;
+                let v = d
+                    .displays
+                    .iter()
+                    .find(|v| v.id == d.selected)
+                    .ok_or_else(invalid)?;
+                (v.id.clone(), v.width, v.height)
+            };
+            let pixels = host.source.capture(&id, w, h, sequence)?;
+            let codec = || err("codec", "VP8 encoding failed");
+            if encoder.is_none() {
+                encoder = Some(Encoder::new(w, h, 1600).map_err(|_| codec())?)
             }
-            pixels
-        } else {
-            let f = dh_platform::runtime::capture(&id)
-                .map_err(|_| err("permission_needed", "Capture is unavailable"))?;
-            if f.width != w || f.height != h {
-                return Err(invalid());
-            }
-            f.pixels_rgba
-        };
-        let codec = || err("codec", "VP8 encoding failed");
-        if encoder.is_none() {
-            encoder = Some(Encoder::new(w, h, 1600).map_err(|_| codec())?)
-        }
-        let f = encoder
-            .as_mut()
-            .unwrap()
-            .encode(&pixels, sequence.is_multiple_of(60))
-            .map_err(|_| codec())?;
-        host.refresh().check(&b, Operation::View, epoch, layout)?;
-        sequence += 1;
-        ch.send(msg(
-            req.request_id,
-            Body::VideoFrame(dh_protocol::VideoFrame {
+            let f = encoder
+                .as_mut()
+                .unwrap()
+                .encode(&pixels, sequence.is_multiple_of(60))
+                .map_err(|_| codec())?;
+            host.refresh().check(&b, Operation::View, epoch, layout)?;
+            sequence += 1;
+            Ok(dh_protocol::VideoFrame {
                 epoch,
                 layout,
                 display_id: id,
@@ -466,8 +481,32 @@ async fn media(
                 width: w,
                 height: h,
                 data: f.data,
-            }),
-        ))
-        .await?;
+            })
+        })();
+        match frame {
+            Ok(frame) => {
+                ch.send(msg(req.request_id, Body::VideoFrame(frame)))
+                    .await?
+            }
+            Err(e) => {
+                // Revoked or stale transports receive no further messages. Active peers
+                // may receive a capture/codec failure for their current presentation.
+                {
+                    let d = host.refresh();
+                    if d.broker.refresh(&b).is_err()
+                        || d.broker.epoch() != epoch
+                        || d.broker.layout() != layout
+                    {
+                        return Err(offline());
+                    }
+                }
+                ch.send(msg(req.request_id, failure(e))).await?;
+                // Keep the QUIC endpoint alive until delivery or peer teardown.
+                let _ = ch.receive().await;
+                return Ok(());
+            }
+        }
     }
 }
+#[cfg(test)]
+mod review_tests;

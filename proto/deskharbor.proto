@@ -41,7 +41,7 @@ message TransferOffer { bytes id = 1; string filename = 2; uint64 size = 3; byte
 message TransferChunk { bytes id = 1; uint64 offset = 2; bytes data = 3; bytes blake3 = 4; }
 message TransferState { bytes id = 1; string state = 2; uint64 offset = 3; string detail = 4; }
 message Command { string name = 1; string argument = 2; uint64 epoch = 3; }
-message HostStatus { string state = 1; uint64 epoch = 2; uint64 layout = 3; repeated Display displays = 4; bool synthetic = 5; }
+message HostStatus { string state = 1; uint64 epoch = 2; uint64 layout = 3; repeated Display displays = 4; bool synthetic = 5; string selected_display = 6; }
 message Display { string id = 1; string name = 2; uint32 width = 3; uint32 height = 4; sint32 x = 5; sint32 y = 6; }
 message VideoFrame { uint64 epoch = 1; uint64 layout = 2; string display_id = 3; uint64 sequence = 4; string codec = 5; bool keyframe = 6; uint32 width = 7; uint32 height = 8; bytes data = 9; }
 

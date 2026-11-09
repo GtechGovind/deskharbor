@@ -24,7 +24,7 @@ use zeroize::Zeroizing;
 #[derive(Clone)]
 pub struct DeskEngine(Arc<Inner>);
 struct Inner {
-    cfg: store::Config,
+    cfg: Arc<store::Config>,
     devices: Mutex<dh_storage::Store>,
     events: broadcast::Sender<EngineEvent>,
     sessions: Mutex<HashMap<u32, Arc<ClientSession>>>,
@@ -34,12 +34,18 @@ struct Inner {
 struct ClientSession {
     info: Mutex<SessionInfo>,
     tx: mpsc::Sender<(Body, oneshot::Sender<EngineResult<Body>>)>,
-    frame: Mutex<Option<Arc<DecodedFrame>>>,
+    presentation: Mutex<Presentation>,
     address: std::net::SocketAddr,
     pin: [u8; 32],
     quic: bool,
     origin: [u8; 16],
     generation: std::sync::atomic::AtomicU64,
+}
+#[derive(Default)]
+struct Presentation {
+    frame: Option<Arc<DecodedFrame>>,
+    retry: bool,
+    sequence: u64,
 }
 fn next_id(id: &AtomicU32) -> EngineResult<u32> {
     id.try_update(Ordering::Relaxed, Ordering::Relaxed, |i| i.checked_add(1))
@@ -69,9 +75,9 @@ impl DeskEngine {
     pub fn new(data_dir: PathBuf) -> EngineResult<Self> {
         let cfg = store::Config::new(&data_dir)?;
         let store =
-            dh_storage::Store::open(cfg.root.join("devices.sqlite3")).map_err(|_| storage())?;
+            dh_storage::Store::open(cfg.database("devices.sqlite3")?).map_err(|_| storage())?;
         Ok(Self(Arc::new(Inner {
-            cfg,
+            cfg: Arc::new(cfg),
             devices: Mutex::new(store),
             events: broadcast::channel(128).0,
             sessions: Mutex::default(),
@@ -83,7 +89,13 @@ impl DeskEngine {
         self.0.events.subscribe()
     }
     pub fn latest_frame(&self, session_id: u32) -> Option<Arc<DecodedFrame>> {
-        self.session(session_id).ok()?.frame.lock().unwrap().clone()
+        self.session(session_id)
+            .ok()?
+            .presentation
+            .lock()
+            .unwrap()
+            .frame
+            .clone()
     }
     fn session(&self, id: u32) -> EngineResult<Arc<ClientSession>> {
         self.0
@@ -95,6 +107,7 @@ impl DeskEngine {
             .ok_or_else(offline)
     }
     pub fn devices(&self) -> EngineResult<Vec<SavedDevice>> {
+        self.0.cfg.database("devices.sqlite3")?;
         Ok(self
             .0
             .devices
@@ -111,6 +124,7 @@ impl DeskEngine {
             .collect())
     }
     pub fn save_device(&self, d: SavedDevice) -> EngineResult<()> {
+        self.0.cfg.database("devices.sqlite3")?;
         let id = d.identity.as_deref().map(unhex).transpose()?;
         self.0
             .devices
@@ -131,6 +145,7 @@ impl DeskEngine {
             })
     }
     pub fn forget_device(&self, address: String) -> EngineResult<()> {
+        self.0.cfg.database("devices.sqlite3")?;
         self.0
             .devices
             .lock()
@@ -162,6 +177,11 @@ impl DeskEngine {
     pub async fn configure_host(&self, settings: HostSettings) -> EngineResult<HostInfo> {
         let r = self.0.cfg.configure(&settings)?;
         self.wait_config(r).await
+    }
+    /// Called only when the local owner explicitly selects a directory, including a replacement at the same name.
+    pub async fn grant_transfer_directory(&self, path: String) -> EngineResult<HostInfo> {
+        let revision = self.0.cfg.grant_directory(&path)?;
+        self.wait_config(revision).await
     }
     pub async fn set_host_password(&self, password: Zeroizing<Vec<u8>>) -> EngineResult<()> {
         let cred =
