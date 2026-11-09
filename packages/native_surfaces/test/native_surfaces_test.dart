@@ -124,4 +124,47 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     }
   });
+  testWidgets(
+    'Linux raster setup failure reaches next presentation and disposal',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      try {
+        var rasterFailed = false;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+              calls.add(call);
+              if (call.method == 'createTexture') return 42;
+              if (call.method == 'disposeTexture') return 23;
+              if ((call.method == 'present' && rasterFailed) ||
+                  call.method == 'collectDisposedTextures') {
+                throw PlatformException(
+                  code: 'renderer_initialization_failed',
+                  message:
+                      'EGL GLES renderer setup failed; restart the application',
+                );
+              }
+              return null;
+            });
+        final surface = await NativeSurface.create(7);
+        await surface.present();
+        rasterFailed =
+            true; // The raster callback failed after initial notification.
+        final rendererError = isA<PlatformException>()
+            .having(
+              (error) => error.code,
+              'code',
+              'renderer_initialization_failed',
+            )
+            .having((error) => error.message, 'message', contains('restart'));
+        await expectLater(surface.present(), throwsA(rendererError));
+        await tester.runAsync(() async {
+          await expectLater(surface.dispose(), throwsA(rendererError));
+        });
+        expect(calls.last.method, 'collectDisposedTextures');
+        expect(calls.last.arguments, {'ticket': 23});
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
 }

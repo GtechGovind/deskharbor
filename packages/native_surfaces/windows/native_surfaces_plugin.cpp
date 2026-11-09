@@ -96,12 +96,8 @@ class Plugin:public flutter::Plugin {
    if(!textures_->MarkTextureFrameAvailable(id)) {
     result->Error("texture_unavailable","Texture no longer registered");return;
    }
-   if(state==DhPresentResult::unavailable) {
-    result->Error("frame_unavailable","No decoded frame for session");return;
-   }
-   if(state==DhPresentResult::invalid) {
-    result->Error("invalid_frame","Malformed RGBA frame");return;
-   }
+   const auto error=DhPresentationError(state);
+   if(error.code[0]){result->Error(error.code,error.message);return;}
    result->Success();
   });
  }

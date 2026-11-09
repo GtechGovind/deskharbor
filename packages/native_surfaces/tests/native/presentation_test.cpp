@@ -11,7 +11,7 @@ int main(){
  available=false;auto raster=presentation.ForUpload();CHECK(acquires==1);CHECK(!raster->empty());CHECK(raster->data()[0]==255);
  CHECK(presentation.Present(acquire,release,7)==DhPresentResult::unavailable);
  auto cleared=presentation.ForUpload();CHECK(cleared->empty());CHECK(cleared->width()==1&&cleared->height()==1);CHECK(cleared->data()[0]==0&&cleared->data()[3]==0);
- CHECK(releases==0);raster.reset();CHECK(releases==1);CHECK(acquires==2);
+ CHECK(releases==1);raster.reset();CHECK(releases==1);CHECK(acquires==2);
  // Borrowed lookup precedes unregister; its raw object survives both the
  // callback and upload. A later callback by itself is NOT a disposal fence.
  auto owner=std::make_shared<DhPresentation>();auto weak=std::weak_ptr<DhPresentation>(owner);

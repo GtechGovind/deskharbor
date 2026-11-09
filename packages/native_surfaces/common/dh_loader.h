@@ -19,7 +19,7 @@
  * module loaded for process life because renderer callbacks may hold leases. */
 typedef struct DhApi { DhAcquire acquire; DhRelease release; } DhApi;
 static inline DhApi dh_load_api(void) {
- DhApi api = {0};
+ DhApi api = {NULL, NULL};
 #ifdef _WIN32
  HMODULE module = NULL;
  GetModuleHandleExW(0, L"dh_ffi.dll", &module);

@@ -11,6 +11,7 @@ struct _DhTexture;
 typedef struct _DhTexture DhTexture;
 struct EnginePool {
  DhRetirementFence<DhTexture> retired;
+ DhRendererHealth renderer_health;
  DhRasterBacking backing; // Raster thread only, bounded to one 128MiB allocation.
  std::atomic<size_t> objects{0};
  std::atomic<bool> shutdown{false};
@@ -100,14 +101,15 @@ static gboolean copy_pixels(FlPixelBufferTexture* base,const uint8_t** buffer,ui
  auto& state=*texture->state;
  // Retired owners are held across borrowed lookup -> callback -> upload.
  // Only the explicit post-unregister raster FIFO fence permits collection.
- if(!state.pool->EnsureCleanupContext()) {
-  g_set_error_literal(error,g_quark_from_static_string("deskharbor"),1,"EGL GLES shared cleanup context unavailable; standard dedicated-raster runner required");
-  return FALSE;
- }
  auto snapshot=state.presentation.ForUpload();
- const auto* pixels=state.pool->backing.Stage(*snapshot);
- if(!pixels) {
-  g_set_error_literal(error,g_quark_from_static_string("deskharbor"),1,"Native frame exceeds raster backing capacity");
+ const unsigned char* pixels=nullptr;
+ const bool prepared=DhPrepareRaster(state.pool->renderer_health,
+  [&]{return state.pool->EnsureCleanupContext();},
+  [&]{pixels=state.pool->backing.Stage(*snapshot);return pixels!=nullptr;});
+ if(!prepared) {
+  state.presentation.Clear();
+  const auto failure=state.pool->renderer_health.PublicError();
+  g_set_error_literal(error,g_quark_from_static_string("deskharbor"),1,failure.message);
   return FALSE;
  }
  *buffer=pixels;*width=snapshot->width();*height=snapshot->height();
@@ -177,6 +179,10 @@ static void method(FlMethodChannel*,FlMethodCall* call,gpointer data) {
   if(!plugin->pool->CollectAfterRasterFence(static_cast<uint64_t>(id))) {
    fl_method_call_respond_error(call,"cleanup_unavailable","Native cleanup context lost or unsupported runner; close this session and restart the application",nullptr,nullptr);return;
   }
+  const auto renderer_error=plugin->pool->renderer_health.PublicError();
+  if(renderer_error.code[0]) {
+   fl_method_call_respond_error(call,renderer_error.code,renderer_error.message,nullptr,nullptr);return;
+  }
   fl_method_call_respond_success(call,nullptr,nullptr);return;
  }
  if(strcmp(name,"createTexture")==0) {
@@ -184,6 +190,8 @@ static void method(FlMethodChannel*,FlMethodCall* call,gpointer data) {
    code="bad_arguments";message="sessionId must be uint32";
   } else if(plugin->pool->shutdown.load()) {
    code="texture_unavailable";message="Flutter view engine is unavailable";
+  } else if(plugin->pool->renderer_health.failed()) {
+   const auto failure=plugin->pool->renderer_health.PublicError();code=failure.code;message=failure.message;
   } else {
    // Registration precedes Dart/FRB initialization. Resolve the exact packaged
    // library lazily and retry a failed lookup at every create request.
@@ -218,13 +226,15 @@ static void method(FlMethodChannel*,FlMethodCall* call,gpointer data) {
     fl_method_call_respond_success(call,ticket,nullptr);return;
    } else {
     auto& state=*it->second->state;
-    const auto result=state.presentation.Present(plugin->api.acquire,plugin->api.release,state.session);
+    const auto result=state.presentation.Present(plugin->api.acquire,plugin->api.release,state.session,&plugin->pool->renderer_health);
     // Missing data publishes an actual transparent clear, never a second acquire.
     if(!fl_texture_registrar_mark_texture_frame_available(plugin->registrar,FL_TEXTURE(it->second))) {
      code="texture_unavailable";message="Texture is unavailable";
-    } else if(result==DhPresentResult::unavailable) {code="frame_unavailable";message="No decoded frame";}
-    else if(result==DhPresentResult::invalid) {code="invalid_frame";message="Malformed or oversized RGBA frame";}
-    else {fl_method_call_respond_success(call,nullptr,nullptr);return;}
+    } else {
+     const auto failure=DhPresentationError(result,&plugin->pool->renderer_health);
+     if(failure.code[0]){code=failure.code;message=failure.message;}
+     else {fl_method_call_respond_success(call,nullptr,nullptr);return;}
+    }
    }
   }
  } else {fl_method_call_respond_not_implemented(call,nullptr);return;}
