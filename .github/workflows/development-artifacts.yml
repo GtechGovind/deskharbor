@@ -57,7 +57,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libegl1-mesa-dev libgles2-mesa-dev nasm
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libegl1-mesa-dev libgles2-mesa-dev nasm xvfb xauth scrot python3-pil
       - name: Windows native build tools
         if: runner.os == 'Windows'
         id: msys
@@ -121,6 +121,18 @@ jobs:
         if: runner.os == 'macOS'
         working-directory: apps/client
         run: flutter build macos --release
+      - name: Verify real Linux native textures on a synthetic display
+        if: runner.os == 'Linux'
+        env:
+          DESKHARBOR_SYNTHETIC_DISPLAY: '1'
+        run: xvfb-run -a -s '-screen 0 1024x768x24 +extension GLX' /usr/bin/python3 tests/texture_smoke/run.py --output target/texture-smoke
+      - name: Preserve synthetic renderer evidence
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: synthetic-renderer-${{ github.sha }}
+          path: target/texture-smoke/
+          if-no-files-found: warn
       - name: Embed helpers and ad-hoc sign Mac application
         if: runner.os == 'macOS'
         shell: bash
