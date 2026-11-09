@@ -42,15 +42,21 @@ fn decoder_requires_keyframe_after_loss_and_recovers_from_forced_keyframe() {
 }
 #[test]
 fn malformed_frame_invalidates_interframe_dependencies() {
-    let rgba=[15,15,240,255].repeat(65*49);
-    let mut encoder=Encoder::new(65,49,1000).unwrap();
-    let first=encoder.encode(&rgba,true).unwrap();
-    let next=encoder.encode(&rgba,false).unwrap();
-    let mut decoder=Decoder::new().unwrap();
-    let decoded=decoder.decode(&first.data).unwrap();
-    assert_eq!((decoded.width,decoded.height,decoded.rgba.len()),(65,49,65*49*4));
-    assert!(decoder.decode(&[255;8]).is_err());
-    assert!(matches!(decoder.decode(&next.data),Err(CodecError::NeedKeyframe)));
+    let rgba = [15, 15, 240, 255].repeat(65 * 49);
+    let mut encoder = Encoder::new(65, 49, 1000).unwrap();
+    let first = encoder.encode(&rgba, true).unwrap();
+    let next = encoder.encode(&rgba, false).unwrap();
+    let mut decoder = Decoder::new().unwrap();
+    let decoded = decoder.decode(&first.data).unwrap();
+    assert_eq!(
+        (decoded.width, decoded.height, decoded.rgba.len()),
+        (65, 49, 65 * 49 * 4)
+    );
+    assert!(decoder.decode(&[255; 8]).is_err());
+    assert!(matches!(
+        decoder.decode(&next.data),
+        Err(CodecError::NeedKeyframe)
+    ));
 }
 #[test]
 fn encoder_and_decoder_reject_unbounded_or_malformed_inputs() {

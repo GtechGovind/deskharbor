@@ -31,7 +31,7 @@ jobs:
           echo 'VPX_LIB_NAME=vpx' >> "$GITHUB_ENV"
       - name: Install pinned Rust tools
         run: |
-          rustup toolchain install 1.99.1 --profile minimal
+          rustup toolchain install 1.99.1 --profile minimal --component rustfmt
           cargo install cargo-expand --version 1.0.127 --locked --jobs 2
       - name: Verify and install bridge generator
         shell: python
@@ -55,6 +55,8 @@ jobs:
       - name: Generate matching Dart and Rust bridge
         working-directory: packages/engine_bridge
         run: ../../target/tools/flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml
+      - name: Normalize generated Rust to workspace style
+        run: rustfmt --edition 2024 crates/dh-ffi/src/frb_generated.rs
       - name: Resolve application dependencies
         working-directory: apps/client
         run: flutter pub get --enforce-lockfile

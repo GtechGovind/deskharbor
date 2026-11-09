@@ -149,7 +149,10 @@ impl Decoder {
     pub fn decode(&mut self, packet: &[u8]) -> Result<DecodedFrame, CodecError> {
         let key = match validate_packet(packet) {
             Ok(key) => key,
-            Err(error) => { self.needs_keyframe = true; return Err(error); }
+            Err(error) => {
+                self.needs_keyframe = true;
+                return Err(error);
+            }
         };
         if self.needs_keyframe && !key {
             return Err(CodecError::NeedKeyframe);

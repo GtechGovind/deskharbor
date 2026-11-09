@@ -4,6 +4,7 @@ __pycache__/
 /artifacts/
 **/artifacts/
 /.superpowers/
+/.idea/
 **/build/
 **/.gradle/
 **/local.properties
