@@ -3,11 +3,44 @@ use crate::{
     channels::QuicIo, tls,
 };
 use rustls::pki_types::{CertificateDer, ServerName};
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
 };
+#[cfg(test)]
+#[path = "socket_binding_tests.rs"]
+mod socket_binding_tests;
+
+async fn bind_tcp_with_udp<T>(
+    address: SocketAddr,
+    mut bind_udp: impl FnMut(SocketAddr) -> io::Result<T>,
+) -> io::Result<(TcpListener, T)> {
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        let result = async {
+            let tcp = TcpListener::bind(address).await?;
+            let udp = bind_udp(tcp.local_addr()?)?;
+            Ok::<_, io::Error>((tcp, udp))
+        }
+        .await;
+        match result {
+            Ok(pair) => return Ok(pair),
+            // TCP and UDP have separate port exclusions on Windows. A TCP
+            // ephemeral choice can be unavailable to UDP; discard both sockets
+            // before asking the OS for another pair. Explicit ports never move.
+            Err(error)
+                if address.port() == 0
+                    && attempts < 16
+                    && matches!(
+                        error.kind(),
+                        io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied
+                    ) => {}
+            Err(error) => return Err(error),
+        }
+    }
+}
 pub struct Listener {
     tcp: TcpListener,
     quic: Option<quinn::Endpoint>,
@@ -20,10 +53,8 @@ impl Listener {
         identity: Identity,
         quic: bool,
     ) -> Result<Self, NetError> {
-        let tcp = TcpListener::bind(address).await?;
-        let address = tcp.local_addr()?;
         let tls = Arc::new(identity.server_config()?);
-        let endpoint = if quic {
+        let quic_config = if quic {
             let crypto = quinn::crypto::rustls::QuicServerConfig::try_from((*tls).clone())
                 .map_err(|_| NetError::Protocol("QUIC TLS config"))?;
             let mut config = quinn::ServerConfig::with_crypto(Arc::new(crypto));
@@ -36,10 +67,15 @@ impl Listener {
                     .map_err(|_| NetError::Protocol("timeout config"))?,
             ));
             config.transport_config(Arc::new(transport));
-            Some(quinn::Endpoint::server(config, address)?)
+            Some(config)
         } else {
             None
         };
+        let (tcp, endpoint) = bind_tcp_with_udp(address, |address| match &quic_config {
+            Some(config) => quinn::Endpoint::server(config.clone(), address).map(Some),
+            None => Ok(None),
+        })
+        .await?;
         Ok(Self {
             tcp,
             quic: endpoint,

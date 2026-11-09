@@ -32,9 +32,14 @@ case "$mode" in
     make -j2
     ;;
   macos)
-    case "$(uname -m)" in arm64) target=arm64-darwin-gcc;; x86_64) target=x86_64-darwin20-gcc;; *) exit 2;; esac
+    # Upstream's unversioned arm64-darwin target means iOS. Darwin24 is
+    # macOS15 (our pinned hosted runners) on both Apple Silicon and Intel.
+    case "$(uname -m)" in arm64) target=arm64-darwin24-gcc;; x86_64) target=x86_64-darwin24-gcc;; *) exit 2;; esac
     bash ../source/configure --target="$target" --enable-pic "${args[@]}"
     make -j2
+    # Check the actual object platform, not just the archive architecture.
+    xcrun vtool -show-build vpx/src/vpx_decoder.c.o | tee platform-check.txt
+    grep -q 'platform MACOS' platform-check.txt || { echo 'codec object is not built for macOS' >&2; exit 2; }
     ;;
   android)
     : "${ANDROID_NDK_HOME:?set ANDROID_NDK_HOME to the pinned installed NDK}"
