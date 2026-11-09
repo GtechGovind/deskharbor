@@ -133,9 +133,11 @@ mod tests {
     }
     #[test]
     fn missing_frame_clears_output() {
-        let mut out = DhFrame::default();
-        out.width = 99;
-        out.length = 99;
+        let mut out = DhFrame {
+            width: 99,
+            length: 99,
+            ..DhFrame::default()
+        };
         assert!(!acquire_frame(None, &mut out));
         assert_eq!(out.width, 0);
         assert_eq!(out.length, 0);
