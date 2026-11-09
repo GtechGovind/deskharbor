@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:engine_bridge/engine_bridge.dart';
 import 'package:deskharbor/controller.dart';
@@ -19,22 +20,39 @@ void main() {
     await engine.events.close();
   });
 
-  test('key up and focus release wait for an earlier key down to finish', () async {
-    final gate = Completer<void>();
-    engine.inputGate = gate;
-    addTearDown(() { if (!gate.isCompleted) gate.complete(); });
-    controller.focus(7, true);
-    final down = controller.input(7, 'key', usage: 4, pressed: true);
-    await Future<void>.delayed(Duration.zero);
-    final up = controller.input(7, 'key', usage: 4, pressed: false);
-    await Future<void>.delayed(Duration.zero);
-    expect(engine.inputs.length, 1);
-    controller.focus(7, false);
-    gate.complete();
-    await Future.wait([down, up]);
-    await Future<void>.delayed(Duration.zero);
-    expect(engine.inputs.last.kind, 'release_all');
-  });
+  test(
+    'a successful connection retry clears the previous authentication error',
+    () async {
+      engine.rejectConnect = true;
+      await controller.connect('192.168.1.9:47832', 'fixture-only');
+      expect(controller.error, contains('Authentication rejected'));
+      engine.rejectConnect = false;
+      await controller.connect('192.168.1.9:47832', 'fixture-only');
+      expect(controller.error, isNull);
+    },
+  );
+
+  test(
+    'key up and focus release wait for an earlier key down to finish',
+    () async {
+      final gate = Completer<void>();
+      engine.inputGate = gate;
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete();
+      });
+      controller.focus(7, true);
+      final down = controller.input(7, 'key', usage: 4, pressed: true);
+      await Future<void>.delayed(Duration.zero);
+      final up = controller.input(7, 'key', usage: 4, pressed: false);
+      await Future<void>.delayed(Duration.zero);
+      expect(engine.inputs.length, 1);
+      controller.focus(7, false);
+      gate.complete();
+      await Future.wait([down, up]);
+      await Future<void>.delayed(Duration.zero);
+      expect(engine.inputs.last.kind, 'release_all');
+    },
+  );
 
   test(
     'epoch and layout changes discard old frame readiness before refocusing',

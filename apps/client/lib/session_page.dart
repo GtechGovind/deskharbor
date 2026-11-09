@@ -205,6 +205,7 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   Future<void> clipboard() async {
     canvasFocus.unfocus();
     final field = TextEditingController();
+    var active = true;
     try {
       await showDialog<void>(
         context: context,
@@ -223,14 +224,18 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
             TextButton(
               onPressed: () async {
                 final value = await controller!.readClipboard(widget.sessionId);
-                if (value != null) field.text = value;
+                if (active && dialogContext.mounted && value != null) {
+                  field.text = value;
+                }
               },
               child: const Text('Get from host'),
             ),
             TextButton(
               onPressed: () async {
                 await controller!.sendClipboard(widget.sessionId, field.text);
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                if (active && dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
               },
               child: const Text('Send to host'),
             ),
@@ -242,6 +247,7 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
         ),
       );
     } finally {
+      active = false;
       field.dispose();
     }
   }
@@ -307,8 +313,7 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      if (surface != null)
-                        Texture(textureId: surface!.textureId),
+                      if (ready) Texture(textureId: surface!.textureId),
                       if (!ready)
                         Center(
                           child: Padding(
@@ -348,177 +353,199 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
     final ratio = display != null && display.height > 0
         ? display.width / display.height
         : 16 / 9;
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact =
+            constraints.maxWidth < 600 || constraints.maxHeight < 600;
+        final content = Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                session.endpoint,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              Chip(label: Text(session.state.replaceAll('_', ' '))),
-              Text(session.transport),
-              if (session.displays.isNotEmpty)
-                SizedBox(
-                  width: 200,
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('${session.id}:${session.selectedDisplay}'),
-                    initialValue:
-                        session.displays.any(
-                          (d) => d.id == session.selectedDisplay,
-                        )
-                        ? session.selectedDisplay
-                        : null,
-                    decoration: const InputDecoration(labelText: 'Monitor'),
-                    items: [
-                      for (final d in session.displays)
-                        DropdownMenuItem(
-                          value: d.id,
-                          child: Text(d.name, overflow: TextOverflow.ellipsis),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    session.endpoint,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  Chip(label: Text(session.state.replaceAll('_', ' '))),
+                  Text(session.transport),
+                  if (session.displays.isNotEmpty)
+                    SizedBox(
+                      width: 200,
+                      child: DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        key: ValueKey(
+                          '${session.id}:${session.selectedDisplay}',
                         ),
-                    ],
-                    onChanged: c.sessionReady(session.id)
-                        ? (id) {
-                            if (id != null) {
-                              unawaited(c.selectMonitor(session.id, id));
-                            }
-                          }
-                        : null,
-                  ),
-                ),
-              OutlinedButton.icon(
-                onPressed: c.sessionReady(session.id) ? clipboard : null,
-                icon: const Icon(Icons.content_paste),
-                label: const Text('Clipboard'),
-              ),
-              OutlinedButton(
-                onPressed: () async {
-                  await c.disconnect(session.id);
-                  if (context.mounted) context.go('/connect');
-                },
-                child: const Text('Disconnect'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SelectableText(
-            'Host identity: ${session.hostIdentity.isEmpty ? 'Unavailable' : session.hostIdentity}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
-          Expanded(child: canvas(ratio)),
-          const SizedBox(height: 8),
-          Text(
-            c.canInput(session.id)
-                ? 'Remote canvas focused · physical HID keys forwarded'
-                : 'Click the remote canvas to control it. Input stops when focus or session state changes.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: false, label: Text('Direct touch')),
-                  ButtonSegment(value: true, label: Text('Trackpad')),
-                ],
-                selected: {trackpad},
-                onSelectionChanged: (value) =>
-                    setState(() => trackpad = value.first),
-              ),
-              for (final m in const [
-                (224, 'Ctrl'),
-                (225, 'Shift'),
-                (226, 'Alt'),
-                (227, 'Meta'),
-              ])
-                FilterChip(
-                  label: Text(m.$2),
-                  selected: modifiers.contains(m.$1),
-                  onSelected: ready
-                      ? (value) {
-                          focusCanvas();
-                          setState(() {
-                            if (value) {
-                              modifiers.add(m.$1);
-                            } else {
-                              modifiers.remove(m.$1);
-                            }
-                          });
-                          unawaited(
-                            c.input(
-                              session.id,
-                              'key',
-                              usage: m.$1,
-                              pressed: value,
+                        initialValue:
+                            session.displays.any(
+                              (d) => d.id == session.selectedDisplay,
+                            )
+                            ? session.selectedDisplay
+                            : null,
+                        decoration: const InputDecoration(labelText: 'Monitor'),
+                        items: [
+                          for (final d in session.displays)
+                            DropdownMenuItem(
+                              value: d.id,
+                              child: Text(
+                                d.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          );
-                        }
-                      : null,
-                ),
-              OutlinedButton.icon(
-                onPressed: ready
-                    ? () => setState(() => showKeyboard = !showKeyboard)
-                    : null,
-                icon: const Icon(Icons.keyboard),
-                label: const Text('Keyboard'),
-              ),
-            ],
-          ),
-          if (showKeyboard) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: const Key('remote-text'),
-                    controller: text,
-                    decoration: const InputDecoration(
-                      labelText: 'Send Unicode text',
+                        ],
+                        onChanged: c.sessionReady(session.id)
+                            ? (id) {
+                                if (id != null) {
+                                  unawaited(c.selectMonitor(session.id, id));
+                                }
+                              }
+                            : null,
+                      ),
                     ),
-                    onSubmitted: (_) => sendText(),
+                  OutlinedButton.icon(
+                    onPressed: c.sessionReady(session.id) ? clipboard : null,
+                    icon: const Icon(Icons.content_paste),
+                    label: const Text('Clipboard'),
                   ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: ready ? sendText : null,
-                  child: const Text('Send text'),
+                  OutlinedButton(
+                    onPressed: () async {
+                      await c.disconnect(session.id);
+                      if (context.mounted) context.go('/connect');
+                    },
+                    child: const Text('Disconnect'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SelectableText(
+                'Host identity: ${session.hostIdentity.isEmpty ? 'Unavailable' : session.hostIdentity}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              if (compact)
+                SizedBox(
+                  height: math.max(
+                    160,
+                    math.min(480, constraints.maxHeight * .45),
+                  ),
+                  child: canvas(ratio),
+                )
+              else
+                Expanded(child: canvas(ratio)),
+              const SizedBox(height: 8),
+              Text(
+                c.canInput(session.id)
+                    ? 'Remote canvas focused · physical HID keys forwarded'
+                    : 'Click the remote canvas to control it. Input stops when focus or session state changes.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('Direct touch')),
+                      ButtonSegment(value: true, label: Text('Trackpad')),
+                    ],
+                    selected: {trackpad},
+                    onSelectionChanged: (value) =>
+                        setState(() => trackpad = value.first),
+                  ),
+                  for (final m in const [
+                    (224, 'Ctrl'),
+                    (225, 'Shift'),
+                    (226, 'Alt'),
+                    (227, 'Meta'),
+                  ])
+                    FilterChip(
+                      label: Text(m.$2),
+                      selected: modifiers.contains(m.$1),
+                      onSelected: ready
+                          ? (value) {
+                              focusCanvas();
+                              setState(() {
+                                if (value) {
+                                  modifiers.add(m.$1);
+                                } else {
+                                  modifiers.remove(m.$1);
+                                }
+                              });
+                              unawaited(
+                                c.input(
+                                  session.id,
+                                  'key',
+                                  usage: m.$1,
+                                  pressed: value,
+                                ),
+                              );
+                            }
+                          : null,
+                    ),
+                  OutlinedButton.icon(
+                    onPressed: ready
+                        ? () => setState(() => showKeyboard = !showKeyboard)
+                        : null,
+                    icon: const Icon(Icons.keyboard),
+                    label: const Text('Keyboard'),
+                  ),
+                ],
+              ),
+              if (showKeyboard) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const Key('remote-text'),
+                        controller: text,
+                        decoration: const InputDecoration(
+                          labelText: 'Send Unicode text',
+                        ),
+                        onSubmitted: (_) => sendText(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: ready ? sendText : null,
+                      child: const Text('Send text'),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: path,
-                  decoration: const InputDecoration(
-                    labelText: 'Local file path',
-                    isDense: true,
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: path,
+                      decoration: const InputDecoration(
+                        labelText: 'Local file path',
+                        isDense: true,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: c.sessionReady(session.id)
-                    ? () => c.sendFile(session.id, path.text)
-                    : null,
-                child: const Text('Send file'),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: c.sessionReady(session.id)
+                        ? () => c.sendFile(session.id, path.text)
+                        : null,
+                    child: const Text('Send file'),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+        return compact ? SingleChildScrollView(child: content) : content;
+      },
     );
   }
 }

@@ -16,6 +16,7 @@ class DeskController extends ChangeNotifier {
   final Map<int, int> frames = {};
   final Set<int> _focused = {};
   final Set<int> _invalid = {};
+  final Map<int, Future<void>> _inputQueues = {};
   StreamSubscription<EngineEventInfo>? _subscription;
   bool _disposed = false;
 
@@ -68,6 +69,7 @@ class DeskController extends ChangeNotifier {
       _notify();
       return null;
     }
+    error = null;
     busy = true;
     _notify();
     try {
@@ -93,13 +95,14 @@ class DeskController extends ChangeNotifier {
       sessions[id]?.state == 'connected' &&
       !_invalid.contains(id);
   void focus(int id, bool value) {
+    bool changed;
     if (value) {
-      _focused.add(id);
+      changed = sessionReady(id) && _focused.add(id);
     } else {
-      _focused.remove(id);
-      unawaited(release(id));
+      changed = _focused.remove(id);
+      if (changed) unawaited(release(id));
     }
-    _notify();
+    if (changed) _notify();
   }
 
   InputRequest request(
@@ -141,29 +144,57 @@ class DeskController extends ChangeNotifier {
   }) async {
     if (!canInput(id)) return;
     final session = sessions[id]!;
-    await run(
-      () => engine.sendInput(
-        id,
-        request(
-          session,
-          kind,
-          usage: usage,
-          pressed: pressed,
-          x: x,
-          y: y,
-          buttons: buttons,
-          wheelX: wheelX,
-          wheelY: wheelY,
-          text: text,
-        ),
+    await _dispatchInput(
+      id,
+      request(
+        session,
+        kind,
+        usage: usage,
+        pressed: pressed,
+        x: x,
+        y: y,
+        buttons: buttons,
+        wheelX: wheelX,
+        wheelY: wheelY,
+        text: text,
       ),
     );
+  }
+
+  Future<void> _dispatchInput(
+    int id,
+    InputRequest event, {
+    bool release = false,
+  }) async {
+    final preceding = _inputQueues[id] ?? Future<void>.value();
+    final pending = preceding.then((_) async {
+      final current = sessions[id];
+      // A queued event must still belong to the focused, current context when
+      // it reaches the native boundary. Release always follows earlier sends.
+      if (!release &&
+          (!canInput(id) ||
+              current?.epoch != event.epoch ||
+              current?.layout != event.layout ||
+              current?.selectedDisplay != event.displayId)) {
+        return;
+      }
+      try {
+        await engine.sendInput(id, event);
+      } catch (e) {
+        // Cleanup must not erase a more useful permission/event-gap diagnostic.
+        if (!release || error == null) error = '$e';
+        _notify();
+      }
+    });
+    _inputQueues[id] = pending;
+    await pending;
+    if (identical(_inputQueues[id], pending)) _inputQueues.remove(id);
   }
 
   Future<void> release(int id, [SessionInfo? previous]) async {
     final session = previous ?? sessions[id];
     if (session != null && initialized) {
-      await run(() => engine.sendInput(id, request(session, 'release_all')));
+      await _dispatchInput(id, request(session, 'release_all'), release: true);
     }
   }
 
@@ -174,8 +205,9 @@ class DeskController extends ChangeNotifier {
   }
 
   Future<void> disconnect(int id) async {
-    await release(id);
     _focused.remove(id);
+    _notify();
+    await release(id);
     await run(() => engine.disconnect(id));
   }
 
@@ -183,6 +215,7 @@ class DeskController extends ChangeNotifier {
     if (!sessionReady(id)) return;
     await release(id);
     _invalid.add(id);
+    frames.remove(id);
     _notify();
     await run(() => engine.selectMonitor(id, display));
     // Input resumes only after a current SessionChanged event arrives.
@@ -265,6 +298,7 @@ class DeskController extends ChangeNotifier {
               previous.state != session.state)) {
         unawaited(release(session.id, previous));
         _focused.remove(session.id);
+        frames.remove(session.id);
       }
       sessions[session.id] = session;
       if (session.state == 'connected') {
@@ -288,6 +322,7 @@ class DeskController extends ChangeNotifier {
           : event.message;
       if (event.code == 'event_gap') {
         _invalid.addAll(sessions.keys);
+        frames.clear();
         releaseAll();
       }
     }

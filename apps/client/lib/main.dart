@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:engine_bridge/engine_bridge.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,8 +14,17 @@ void main() => runApp(const MyApp());
 final deskControllerProvider = Provider<DeskController>(
   (ref) => throw StateError('DeskController must be provided'),
 );
-DeskController desk(BuildContext context) =>
-    ProviderScope.containerOf(context).read(deskControllerProvider);
+DeskController desk(BuildContext context) {
+  context.dependOnInheritedWidgetOfExactType<_ControllerScope>();
+  return ProviderScope.containerOf(context).read(deskControllerProvider);
+}
+
+class _ControllerScope extends InheritedNotifier<DeskController> {
+  const _ControllerScope({
+    required DeskController controller,
+    required super.child,
+  }) : super(notifier: controller);
+}
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key, this.controller});
@@ -119,9 +129,9 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) => ProviderScope(
     overrides: [deskControllerProvider.overrideWithValue(controller)],
-    child: ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) => MaterialApp.router(
+    child: _ControllerScope(
+      controller: controller,
+      child: MaterialApp.router(
         title: 'DeskHarbor',
         debugShowCheckedModeBanner: false,
         theme: theme(Brightness.light),
@@ -149,8 +159,10 @@ class DeskShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = desk(context);
     final index = destinations.indexWhere((d) => d.$3 == location);
-    final selected = index < 0 ? 0 : index;
-    final wide = MediaQuery.sizeOf(context).width >= 760;
+    final selected = location == '/permissions' ? 4 : (index < 0 ? 0 : index);
+    final wide =
+        defaultTargetPlatform != TargetPlatform.android &&
+        MediaQuery.sizeOf(context).width >= 760;
     return Scaffold(
       appBar: AppBar(
         title: const Text('DeskHarbor'),
@@ -177,8 +189,7 @@ class DeskShell extends StatelessWidget {
           if (wide)
             SizedBox(
               width: 224,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: ListView(
                 children: [
                   const Padding(
                     padding: EdgeInsets.fromLTRB(24, 16, 16, 24),
@@ -208,23 +219,17 @@ class DeskShell extends StatelessWidget {
                       ),
                     ),
                   const Divider(),
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        for (final session in controller.sessions.values)
-                          ListTile(
-                            leading: const Icon(Icons.desktop_windows),
-                            title: Text(
-                              session.endpoint,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(session.state),
-                            onTap: () => context.go('/session/${session.id}'),
-                          ),
-                      ],
+                  for (final session in controller.sessions.values)
+                    ListTile(
+                      leading: const Icon(Icons.desktop_windows),
+                      title: Text(
+                        session.endpoint,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(session.state),
+                      onTap: () => context.go('/session/${session.id}'),
                     ),
-                  ),
                   const Padding(
                     padding: EdgeInsets.all(20),
                     child: Text(
@@ -397,6 +402,7 @@ class _ConnectPageState extends State<ConnectPage> {
         Align(
           alignment: Alignment.centerLeft,
           child: FilledButton.icon(
+            key: const Key('connect-submit'),
             onPressed: controller.initialized && !controller.busy
                 ? connect
                 : null,
@@ -647,7 +653,7 @@ class _DevicesPageState extends State<DevicesPage> {
             onPressed: controller.initialized
                 ? () async {
                     await controller.save(name.text, address.text);
-                    if (controller.error == null) {
+                    if (mounted && controller.error == null) {
                       name.clear();
                       address.clear();
                     }

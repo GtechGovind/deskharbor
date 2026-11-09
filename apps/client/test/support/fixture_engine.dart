@@ -10,6 +10,8 @@ class FixtureEngine implements EngineGateway {
   bool rejectConnect = false, rejectHost = false;
   int disconnects = 0;
   Completer<void>? inputGate;
+  Completer<String>? clipboardGate;
+  Completer<void>? saveGate;
   HostInfo host = HostInfo(
     state: 'permission_needed',
     running: false,
@@ -96,7 +98,11 @@ class FixtureEngine implements EngineGateway {
   @override
   Future<void> selectMonitor(int sessionId, String displayId) async {}
   @override
-  Future<String> clipboardRequestText(int sessionId) async => 'fixture text';
+  Future<String> clipboardRequestText(int sessionId) async {
+    if (clipboardGate case final gate?) return await gate.future;
+    return 'fixture text';
+  }
+
   @override
   Future<void> clipboardSendText(int sessionId, String text) async {}
   @override
@@ -129,6 +135,7 @@ class FixtureEngine implements EngineGateway {
   Future<List<SavedDevice>> devices() async => List.of(saved);
   @override
   Future<void> saveDevice(SavedDevice device) async {
+    if (saveGate case final gate?) await gate.future;
     saved.add(device);
   }
 
