@@ -61,6 +61,8 @@ jobs:
           echo "VPX_LIB_DIR=$GITHUB_WORKSPACE/target/native-deps/libvpx/build" >> "$GITHUB_ENV"
           echo 'VPX_LIB_NAME=vpx' >> "$GITHUB_ENV"
       - name: Format
+        id: format
+        continue-on-error: true
         run: cargo fmt --all -- --check
       - name: Windows tests
         if: runner.os == 'Windows'
@@ -83,6 +85,9 @@ jobs:
       - name: Build macOS native probe
         if: runner.os == 'macOS'
         run: swift build -c release --package-path native/macos
+      - name: Require workspace formatting
+        if: always() && steps.format.outcome == 'failure'
+        run: exit 1
   android-probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
